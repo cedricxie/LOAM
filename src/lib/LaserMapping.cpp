@@ -1074,6 +1074,10 @@ void LaserMapping::publishResult()
   // publish transformed full resolution input cloud
   publishCloudMsg(_pubLaserCloudFullRes, *_laserCloudFullRes, _timeLaserOdometry, "/camera_init");
 
+  //std::ostringstream titlePC;
+  //titlePC.open ("/home/cedricxie/Documents/Udacity/Didi_Challenge/catkin_ws/ros_bags/kitti/result.pcd", std::ios_base::app);
+  //pcl::io::savePLYFile(titlePC.str().c_str(), *laserCloudFullRes);
+
 
   // publish odometry after mapped transformations
   geometry_msgs::Quaternion geoQuat = tf::createQuaternionMsgFromRollPitchYaw

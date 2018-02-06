@@ -31,7 +31,7 @@
 //     Robotics: Science and Systems Conference (RSS). Berkeley, CA, July 2014.
 
 #include "loam_velodyne/TransformMaintenance.h"
-
+#include <fstream>
 
 namespace loam {
 
@@ -47,6 +47,7 @@ TransformMaintenance::TransformMaintenance()
   _laserOdometry2.header.frame_id = "/camera_init";
   _laserOdometry2.child_frame_id = "/camera";
 
+  _pathMsg.header.frame_id = "/camera_init";
   _laserOdometryTrans2.frame_id_ = "/camera_init";
   _laserOdometryTrans2.child_frame_id_ = "/camera";
 
@@ -65,6 +66,8 @@ bool TransformMaintenance::setup(ros::NodeHandle &node, ros::NodeHandle &private
 {
   // advertise integrated laser odometry topic
   _pubLaserOdometry2 = node.advertise<nav_msgs::Odometry> ("/integrated_to_init", 5);
+
+  _pubOdomToPath = node.advertise<nav_msgs::Path> ("/odom_to_path", 2);
 
   // subscribe to laser odometry and mapping odometry topics
   _subLaserOdometry = node.subscribe<nav_msgs::Odometry>
@@ -182,6 +185,7 @@ void TransformMaintenance::laserOdometryHandler(const nav_msgs::Odometry::ConstP
   double roll, pitch, yaw;
   geometry_msgs::Quaternion geoQuat = laserOdometry->pose.pose.orientation;
   tf::Matrix3x3(tf::Quaternion(geoQuat.z, -geoQuat.x, -geoQuat.y, geoQuat.w)).getRPY(roll, pitch, yaw);
+  tf::Matrix3x3 result = tf::Matrix3x3(tf::Quaternion(geoQuat.z, -geoQuat.x, -geoQuat.y, geoQuat.w));
 
   _transformSum[0] = -pitch;
   _transformSum[1] = -yaw;
@@ -190,6 +194,33 @@ void TransformMaintenance::laserOdometryHandler(const nav_msgs::Odometry::ConstP
   _transformSum[3] = laserOdometry->pose.pose.position.x;
   _transformSum[4] = laserOdometry->pose.pose.position.y;
   _transformSum[5] = laserOdometry->pose.pose.position.z;
+
+  // write odom to file
+  std::ofstream myfile;
+  myfile.open ("/home/cedricxie/Documents/Udacity/Didi_Challenge/catkin_ws/ros_bags/kitti/result.txt", std::ios_base::app);
+  myfile << result[0][0] << " " << result[0][1] << " " << result[0][2] << " " << _transformSum[3] << " "
+         << result[1][0] << " " << result[1][1] << " " << result[1][2] << " " << _transformSum[4] << " "
+         << result[2][0] << " " << result[2][1] << " " << result[2][2] << " " << _transformSum[5] << " " << " \n";
+  myfile.close();
+
+  // publish path from odom
+
+  geometry_msgs::PoseStamped _poseInPathMsg;
+
+  // set atributes of the msg
+  _pathMsg.header.stamp = ros::Time::now();
+  _poseInPathMsg.header.stamp = laserOdometry->header.stamp;
+  //_poseInPathMsg.header.frame_id = "pose_in_path";
+  _poseInPathMsg.pose.position.x = _transformMapped[3];
+  _poseInPathMsg.pose.position.y = _transformMapped[4];
+  _poseInPathMsg.pose.position.z = _transformMapped[5];
+  _poseInPathMsg.pose.orientation.x = -geoQuat.y;
+  _poseInPathMsg.pose.orientation.y = -geoQuat.z;
+  _poseInPathMsg.pose.orientation.z = geoQuat.x;
+  _poseInPathMsg.pose.orientation.w = geoQuat.w;
+  _pathMsg.poses.push_back(_poseInPathMsg);
+
+  _pubOdomToPath.publish(_pathMsg);
 
   transformAssociateToMap();
 
