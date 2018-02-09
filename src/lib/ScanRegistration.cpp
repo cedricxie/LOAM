@@ -347,7 +347,9 @@ void ScanRegistration::extractFeatures(const uint16_t& beginIdx)
       _laserCloud[j].intensity = i + _scanPeriod * (j - scanStartIdx) / scanSize;
     }*/
 
-    // reset scan buffers
+    // reset scan buffers, and in addition
+    // 1. remove surfaces close to parallel to laser beams
+    // 2. remove points on occluded objects
     setScanBuffersFor(scanStartIdx, scanEndIdx);
 
     // extract features from equally sized scan regions
@@ -365,7 +367,9 @@ void ScanRegistration::extractFeatures(const uint16_t& beginIdx)
 
       size_t regionSize = ep - sp + 1;
 
-      // reset region buffers
+      // reset region buffers, and in addition
+      // 1. calculate local curvatures C
+      // 2. sort points based on C
       setRegionBuffersFor(sp, ep);
 
 
