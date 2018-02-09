@@ -474,27 +474,39 @@ void LaserMapping::process()
   pcl::PointXYZI pointSel;
 
   // relate incoming data to map
+  // 将相关坐标转移到世界坐标系下->得到可用于建图的Lidar坐标
   transformAssociateToMap();
-
+  
+  // 将上一时刻所有边特征转到世界坐标系下
   size_t laserCloudCornerLastNum = _laserCloudCornerLast->points.size();
   for (int i = 0; i < laserCloudCornerLastNum; i++) {
     pointAssociateToMap(_laserCloudCornerLast->points[i], pointSel);
     _laserCloudCornerStack->push_back(pointSel);
   }
-
+  
+  // 将上一时刻所有面特征转到世界坐标系下
   size_t laserCloudSurfLastNum = _laserCloudSurfLast->points.size();
   for (int i = 0; i < laserCloudSurfLastNum; i++) {
     pointAssociateToMap(_laserCloudSurfLast->points[i], pointSel);
     _laserCloudSurfStack->push_back(pointSel);
   }
-
-
-  pcl::PointXYZI pointOnYAxis;
+  
+  /*
+  _laserCloudCenWidth(10): 邻域宽度, cm为单位
+  _laserCloudCenHeight(5): 邻域高度
+  _laserCloudCenDepth(10): 邻域深度
+  _laserCloudWidth(21): 子cube沿宽方向的分割个数
+  _laserCloudHeight(11): 高方向个数
+  _laserCloudDepth(21): 深度方向个数
+  */
+  
+  pcl::PointXYZI pointOnYAxis;  // 当前Lidar坐标系{L}y轴上的一点(0,10,0)
   pointOnYAxis.x = 0.0;
   pointOnYAxis.y = 10.0;
   pointOnYAxis.z = 0.0;
-  pointAssociateToMap(pointOnYAxis, pointOnYAxis);
-
+  pointAssociateToMap(pointOnYAxis, pointOnYAxis); // 转到世界坐标系{W}下
+  
+  // cube中心位置索引
   int centerCubeI = int((_transformTobeMapped.pos.x() + 25.0) / 50.0) + _laserCloudCenWidth;
   int centerCubeJ = int((_transformTobeMapped.pos.y() + 25.0) / 50.0) + _laserCloudCenHeight;
   int centerCubeK = int((_transformTobeMapped.pos.z() + 25.0) / 50.0) + _laserCloudCenDepth;
