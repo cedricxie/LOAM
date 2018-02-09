@@ -351,6 +351,7 @@ void ScanRegistration::extractFeatures(const uint16_t& beginIdx)
     setScanBuffersFor(scanStartIdx, scanEndIdx);
 
     // extract features from equally sized scan regions
+    // 将每个线等分为六段，分别进行处理（sp、ep分别为各段的起始和终止位置）
     for (int j = 0; j < _config.nFeatureRegions; j++) {
       size_t sp = ((scanStartIdx + _config.curvatureRegion) * (_config.nFeatureRegions - j)
                    + (scanEndIdx - _config.curvatureRegion) * j) / _config.nFeatureRegions;
@@ -456,6 +457,13 @@ void ScanRegistration::setRegionBuffersFor(const size_t& startIdx,
     _regionCurvature[regionIdx] = diffX * diffX + diffY * diffY + diffZ * diffZ;
     _regionSortIndices[regionIdx] = i;
   }
+  
+  /**
+	 * 计算以某点与其相邻的10个点所构成的平面在该点出的曲率：
+	 * 由曲率公式知：K=1/R，因此为简化计算可通过10个向量的和向量的模长表
+	 * 示其在该点处曲率半径的长，因此R×R可用来表示曲率的大小
+	 * -> R×R越大，该点处越不平坦。
+	 */
 
   // sort point curvatures
   for (size_t i = 1; i < regionSize; i++) {
@@ -483,14 +491,17 @@ void ScanRegistration::setScanBuffersFor(const size_t& startIdx,
     const pcl::PointXYZI& nextPoint = (_laserCloud[i + 1]);
 
     float diffNext = calcSquaredDiff(nextPoint, point);
-
+    
+    /* 针对论文中(b)情况 */
     if (diffNext > 0.1) {
       float depth1 = calcPointDistance(point);
       float depth2 = calcPointDistance(nextPoint);
 
       if (depth1 > depth2) {
         float weighted_distance = std::sqrt(calcSquaredDiff(nextPoint, point, depth2 / depth1)) / depth2;
-
+        
+        // 根据等腰三角形性质，这一判断threshold=0.1实际表示X[i]向量与X[i+1]的夹角小于5.732度
+        // cloudNeighborPicked 是考虑一个特征点周围不能再设置成特征约束的判断标志位
         if (weighted_distance < 0.1) {
           std::fill_n(&_scanNeighborPicked[i - startIdx - _config.curvatureRegion], _config.curvatureRegion + 1, 1);
 
@@ -504,7 +515,8 @@ void ScanRegistration::setScanBuffersFor(const size_t& startIdx,
         }
       }
     }
-
+    
+    /* 针对论文中(a)情况 */
     float diffPrevious = calcSquaredDiff(point, previousPoint);
     float dis = calcSquaredPointDistance(point);
 
