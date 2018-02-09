@@ -166,8 +166,9 @@ void MultiScanRegistration::process(const pcl::PointCloud<pcl::PointXYZ>& laserC
   //float startOri = -std::atan2(laserCloudIn[0].y, laserCloudIn[0].x);
   //float endOri = -std::atan2(laserCloudIn[cloudSize - 1].y, laserCloudIn[cloudSize - 1].x) + 2 * float(M_PI);
   // TODO: evaluate effect of change
-  float startOri = -std::atan2(laserCloudIn[0].y, laserCloudIn[0].x);
-  float endOri = -std::atan2(laserCloudIn[cloudSize - 1].y, laserCloudIn[cloudSize - 1].x) + 2 * float(M_PI);
+  float startOri = -std::atan2(laserCloudIn[0].x, laserCloudIn[0].z);
+  float endOri = -std::atan2(laserCloudIn[cloudSize - 1].x, laserCloudIn[cloudSize - 1].z) + 2 * float(M_PI);
+  
   if (endOri - startOri > 3 * M_PI) {
     endOri -= 2 * M_PI;
   } else if (endOri - startOri < M_PI) {
