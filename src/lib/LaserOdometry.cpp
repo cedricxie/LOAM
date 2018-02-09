@@ -452,7 +452,8 @@ void LaserOdometry::process()
 
   // reset flags, etc.
   reset();
-
+  
+  /********** Initialization *********/
   if (!_systemInited) {
     _cornerPointsLessSharp.swap(_lastCornerCloud);
     _surfPointsLessFlat.swap(_lastSurfaceCloud);
@@ -477,7 +478,9 @@ void LaserOdometry::process()
 
   size_t lastCornerCloudSize = _lastCornerCloud->points.size();
   size_t lastSurfaceCloudSize = _lastSurfaceCloud->points.size();
-
+  
+  // 上一时刻特征边(曲率大)上的点云个数大于10， 特征面内的点云大于100  
+  // -> 保证足够多的特征点可用于t+1时刻的匹配
   if (lastCornerCloudSize > 10 && lastSurfaceCloudSize > 100) {
     std::vector<int> pointSearchInd(1);
     std::vector<float> pointSearchSqDis(1);
@@ -493,29 +496,42 @@ void LaserOdometry::process()
     _pointSearchSurfInd2.resize(surfPointsFlatNum);
     _pointSearchSurfInd3.resize(surfPointsFlatNum);
 
+    // start of the iteration
     for (size_t iterCount = 0; iterCount < _maxIterations; iterCount++) {
       pcl::PointXYZI pointSel, pointProj, tripod1, tripod2, tripod3;
       _laserCloudOri->clear();
       _coeffSel->clear();
-
+      
+      // find closest point for cornerPointsSharp
       for (int i = 0; i < cornerPointsSharpNum; i++) {
+        // 将点坐标转换到起始点云坐标系中
+        // TODO: should do nothing if IMU not set?
         transformToStart(_cornerPointsSharp->points[i], pointSel);
 
+        // 每迭代五次,搜索一次最近点和次临近点(降采样)
         if (iterCount % 5 == 0) {
           pcl::removeNaNFromPointCloud(*_lastCornerCloud, *_lastCornerCloud, indices);
+          
+          // 找到pointSel(当前时刻边特征中的某一点)在laserCloudCornerLast中的1个最邻近点
+	        // -> 返回pointSearchInd(点对应的索引)  pointSearchSqDis(pointSel与对应点的欧氏距离)
           _lastCornerKDTree.nearestKSearch(pointSel, 1, pointSearchInd, pointSearchSqDis);
-
+          
+          // 在最邻近点附近(向上下三条扫描线以内)找到次临近点
           int closestPointInd = -1, minPointInd2 = -1;
           if (pointSearchSqDis[0] < 25) {
             closestPointInd = pointSearchInd[0];
             int closestPointScan = int(_lastCornerCloud->points[closestPointInd].intensity);
-
+            
+            // 从找得到的最邻近点开始，遍历所有边特征点
             float pointSqDis, minPointSqDis2 = 25;
+            
+            // 向上三条线，找次临近点
             for (int j = closestPointInd + 1; j < cornerPointsSharpNum; j++) {
               if (int(_lastCornerCloud->points[j].intensity) > closestPointScan + 2.5) {
                 break;
               }
-
+              
+              // 计算遍历点与最邻近点的距离(平方)
               pointSqDis = calcSquaredDiff(_lastCornerCloud->points[j], pointSel);
 
               if (int(_lastCornerCloud->points[j].intensity) > closestPointScan) {
@@ -525,11 +541,14 @@ void LaserOdometry::process()
                 }
               }
             }
+            
+            // 向下三条线，找次临近点
             for (int j = closestPointInd - 1; j >= 0; j--) {
               if (int(_lastCornerCloud->points[j].intensity) < closestPointScan - 2.5) {
                 break;
               }
-
+              
+              // 计算遍历点与最邻近点的距离(平方)
               pointSqDis = calcSquaredDiff(_lastCornerCloud->points[j], pointSel);
 
               if (int(_lastCornerCloud->points[j].intensity) < closestPointScan) {
@@ -541,8 +560,8 @@ void LaserOdometry::process()
             }
           }
 
-          _pointSearchCornerInd1[i] = closestPointInd;
-          _pointSearchCornerInd2[i] = minPointInd2;
+          _pointSearchCornerInd1[i] = closestPointInd; // 当前所有边特征点在上一时刻边特征点云中对应的最邻近点的索引
+          _pointSearchCornerInd2[i] = minPointInd2;    // 当前所有边特征点在上一时刻边特征点云中对应的次邻近点的索引
         }
 
         if (_pointSearchCornerInd2[i] >= 0) {
@@ -601,7 +620,8 @@ void LaserOdometry::process()
           }
         }
       }
-
+      
+      // find closest point for surfPointsFlat
       for (int i = 0; i < surfPointsFlatNum; i++) {
         transformToStart(_surfPointsFlat->points[i], pointSel);
 
