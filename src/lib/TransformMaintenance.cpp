@@ -185,7 +185,6 @@ void TransformMaintenance::laserOdometryHandler(const nav_msgs::Odometry::ConstP
   double roll, pitch, yaw;
   geometry_msgs::Quaternion geoQuat = laserOdometry->pose.pose.orientation;
   tf::Matrix3x3(tf::Quaternion(geoQuat.z, -geoQuat.x, -geoQuat.y, geoQuat.w)).getRPY(roll, pitch, yaw);
-  tf::Matrix3x3 result = tf::Matrix3x3(tf::Quaternion(geoQuat.z, -geoQuat.x, -geoQuat.y, geoQuat.w));
 
   _transformSum[0] = -pitch;
   _transformSum[1] = -yaw;
@@ -195,12 +194,35 @@ void TransformMaintenance::laserOdometryHandler(const nav_msgs::Odometry::ConstP
   _transformSum[4] = laserOdometry->pose.pose.position.y;
   _transformSum[5] = laserOdometry->pose.pose.position.z;
 
+  // Lidar里程计估计位姿转到世界坐标系下
+  transformAssociateToMap();
+  // Lidar在世界坐标系下的姿态
+  geoQuat = tf::createQuaternionMsgFromRollPitchYaw
+      (_transformMapped[2], -_transformMapped[0], -_transformMapped[1]);
+  // 发布Lidar在世界坐标系下的位姿
+  _laserOdometry2.header.stamp = laserOdometry->header.stamp;
+  _laserOdometry2.pose.pose.orientation.x = -geoQuat.y;
+  _laserOdometry2.pose.pose.orientation.y = -geoQuat.z;
+  _laserOdometry2.pose.pose.orientation.z = geoQuat.x;
+  _laserOdometry2.pose.pose.orientation.w = geoQuat.w;
+  _laserOdometry2.pose.pose.position.x = _transformMapped[3];
+  _laserOdometry2.pose.pose.position.y = _transformMapped[4];
+  _laserOdometry2.pose.pose.position.z = _transformMapped[5];
+  _pubLaserOdometry2.publish(_laserOdometry2);
+
+  _laserOdometryTrans2.stamp_ = laserOdometry->header.stamp;
+  _laserOdometryTrans2.setRotation(tf::Quaternion(-geoQuat.y, -geoQuat.z, geoQuat.x, geoQuat.w));
+  _laserOdometryTrans2.setOrigin(tf::Vector3(_transformMapped[3], _transformMapped[4], _transformMapped[5]));
+  _tfBroadcaster2.sendTransform(_laserOdometryTrans2);
+  
   // write odom to file
+  tf::Matrix3x3 result = tf::Matrix3x3(tf::Quaternion(geoQuat.z, -geoQuat.x, -geoQuat.y, geoQuat.w));
+  
   std::ofstream myfile;
   myfile.open ("/home/cedricxie/Documents/Udacity/Didi_Challenge/catkin_ws/ros_bags/kitti/result.txt", std::ios_base::app);
-  myfile << result[0][0] << " " << result[0][1] << " " << result[0][2] << " " << _transformSum[3] << " "
-         << result[1][0] << " " << result[1][1] << " " << result[1][2] << " " << _transformSum[4] << " "
-         << result[2][0] << " " << result[2][1] << " " << result[2][2] << " " << _transformSum[5] << " " << " \n";
+  myfile << result[0][0] << " " << result[0][1] << " " << result[0][2] << " " << _transformMapped[3] << " "
+         << result[1][0] << " " << result[1][1] << " " << result[1][2] << " " << _transformMapped[4] << " "
+         << result[2][0] << " " << result[2][1] << " " << result[2][2] << " " << _transformMapped[5] << " " << " \n";
   myfile.close();
 
   // publish path from odom
@@ -219,28 +241,8 @@ void TransformMaintenance::laserOdometryHandler(const nav_msgs::Odometry::ConstP
   _poseInPathMsg.pose.orientation.z = geoQuat.x;
   _poseInPathMsg.pose.orientation.w = geoQuat.w;
   _pathMsg.poses.push_back(_poseInPathMsg);
-
+  
   _pubOdomToPath.publish(_pathMsg);
-
-  transformAssociateToMap();
-
-  geoQuat = tf::createQuaternionMsgFromRollPitchYaw
-      (_transformMapped[2], -_transformMapped[0], -_transformMapped[1]);
-
-  _laserOdometry2.header.stamp = laserOdometry->header.stamp;
-  _laserOdometry2.pose.pose.orientation.x = -geoQuat.y;
-  _laserOdometry2.pose.pose.orientation.y = -geoQuat.z;
-  _laserOdometry2.pose.pose.orientation.z = geoQuat.x;
-  _laserOdometry2.pose.pose.orientation.w = geoQuat.w;
-  _laserOdometry2.pose.pose.position.x = _transformMapped[3];
-  _laserOdometry2.pose.pose.position.y = _transformMapped[4];
-  _laserOdometry2.pose.pose.position.z = _transformMapped[5];
-  _pubLaserOdometry2.publish(_laserOdometry2);
-
-  _laserOdometryTrans2.stamp_ = laserOdometry->header.stamp;
-  _laserOdometryTrans2.setRotation(tf::Quaternion(-geoQuat.y, -geoQuat.z, geoQuat.x, geoQuat.w));
-  _laserOdometryTrans2.setOrigin(tf::Vector3(_transformMapped[3], _transformMapped[4], _transformMapped[5]));
-  _tfBroadcaster2.sendTransform(_laserOdometryTrans2);
 }
 
 
