@@ -177,6 +177,13 @@ void MultiScanRegistration::process(const pcl::PointCloud<pcl::PointXYZ>& laserC
 
   bool halfPassed = false;
   pcl::PointXYZI point;
+  
+  /**
+   * 三维扫描仪并不像二维那样按照角度给出个距离值，从而保证每次的扫描都有
+   * 相同的数据量。 PointCloud2接受到的点云的大小在变化，因此在数据到达时
+   * 需要一些运算来判断点的一些特征。
+   */
+  /* 将点划到不同的线中 */
   std::vector<pcl::PointCloud<pcl::PointXYZI> > laserCloudScans(_scanMapper.getNumberOfScanRings());
 
   // extract valid points from input cloud
