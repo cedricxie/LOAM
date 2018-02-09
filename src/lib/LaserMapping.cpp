@@ -514,7 +514,10 @@ void LaserMapping::process()
   if (_transformTobeMapped.pos.x() + 25.0 < 0) centerCubeI--;
   if (_transformTobeMapped.pos.y() + 25.0 < 0) centerCubeJ--;
   if (_transformTobeMapped.pos.z() + 25.0 < 0) centerCubeK--;
-
+  
+  // 如果取到的子cube在整个大cube的边缘则将点对应的cube的索引向中心方向挪动一个单位，这样做主要是截取边沿cube。
+  
+  // 将点的指针向中心方向平移 Start -------
   while (centerCubeI < 3) {
     for (int j = 0; j < _laserCloudHeight; j++) {
       for (int k = 0; k < _laserCloudDepth; k++) {
@@ -604,7 +607,9 @@ void LaserMapping::process()
     centerCubeK--;
     _laserCloudCenDepth--;
   }
+  // 将点的指针向中心方向平移 --------- End
 
+  // 处理完毕边沿点，接下来就是在取到的子cube的5*5*5的邻域内找对应的配准点了。
   _laserCloudValidInd.clear();
   _laserCloudSurroundInd.clear();
   for (int i = centerCubeI - 2; i <= centerCubeI + 2; i++) {
@@ -614,16 +619,27 @@ void LaserMapping::process()
             j >= 0 && j < _laserCloudHeight &&
             k >= 0 && k < _laserCloudDepth) {
 
+          // 计算子cube对应的点坐标 
+          // NOTE: 由于ijk均为整数，坐标取值为中心点坐标
           float centerX = 50.0f * (i - _laserCloudCenWidth);
           float centerY = 50.0f * (j - _laserCloudCenHeight);
           float centerZ = 50.0f * (k - _laserCloudCenDepth);
 
           pcl::PointXYZI transform_pos = (pcl::PointXYZI) _transformTobeMapped.pos;
-
+          
+          // 取邻近的8个点坐标
           bool isInLaserFOV = false;
           for (int ii = -1; ii <= 1; ii += 2) {
             for (int jj = -1; jj <= 1; jj += 2) {
               for (int kk = -1; kk <= 1; kk += 2) {
+                
+                /* 这里还需要判断一下该点是否属于当前Lidar的可视范围内，
+                   可以根据余弦公式对距离范围进行推导。根据代码中的式子，
+                   只要点在x轴±60°的范围内都认为是FOV中的点(作者这么做是
+                   因为Lidar里程计的估计结果不准确了，只能概略的取一个
+                   较大的范围)。于是我们就得到了在当前Lidar位置的邻域内
+                   有效的地图特征点
+                */
                 pcl::PointXYZI corner;
                 corner.x = centerX + 25.0f * ii;
                 corner.y = centerY + 25.0f * jj;
@@ -660,22 +676,24 @@ void LaserMapping::process()
   _laserCloudSurfFromMap->clear();
   size_t laserCloudValidNum = _laserCloudValidInd.size();
   for (int i = 0; i < laserCloudValidNum; i++) {
-    *_laserCloudCornerFromMap += *_laserCloudCornerArray[_laserCloudValidInd[i]];
-    *_laserCloudSurfFromMap += *_laserCloudSurfArray[_laserCloudValidInd[i]];
+    *_laserCloudCornerFromMap += *_laserCloudCornerArray[_laserCloudValidInd[i]]; // 有效的特征边上的点的个数
+    *_laserCloudSurfFromMap += *_laserCloudSurfArray[_laserCloudValidInd[i]]; // 有效的特征面上的点的个数
   }
 
   // prepare feature stack clouds for pose optimization
-  size_t laserCloudCornerStackNum2 = _laserCloudCornerStack->points.size();
+  // 将世界坐标系下的当前帧特征点转到当前Lidar坐标系下
+  size_t laserCloudCornerStackNum2 = _laserCloudCornerStack->points.size(); // 所有特征边上的点的个数
   for (int i = 0; i < laserCloudCornerStackNum2; i++) {
     pointAssociateTobeMapped(_laserCloudCornerStack->points[i], _laserCloudCornerStack->points[i]);
   }
 
-  size_t laserCloudSurfStackNum2 = _laserCloudSurfStack->points.size();
+  size_t laserCloudSurfStackNum2 = _laserCloudSurfStack->points.size();  // 所有特征面上的点的个数
   for (int i = 0; i < laserCloudSurfStackNum2; i++) {
     pointAssociateTobeMapped(_laserCloudSurfStack->points[i], _laserCloudSurfStack->points[i]);
   }
 
   // down sample feature stack clouds
+  // 对所有当前帧特征点进行滤波处理
   _laserCloudCornerStackDS->clear();
   _downSizeFilterCorner.setInputCloud(_laserCloudCornerStack);
   _downSizeFilterCorner.filter(*_laserCloudCornerStackDS);
@@ -695,6 +713,7 @@ void LaserMapping::process()
 
 
   // store down sized corner stack points in corresponding cube clouds
+  // 将当前帧扫描得到的特征点云封装在不同的cube中，并在地图数组中保存
   for (int i = 0; i < laserCloudCornerStackNum; i++) {
     pointAssociateToMap(_laserCloudCornerStackDS->points[i], pointSel);
 
