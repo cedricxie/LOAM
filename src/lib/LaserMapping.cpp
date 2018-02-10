@@ -51,8 +51,8 @@ using std::pow;
 LaserMapping::LaserMapping(const float& scanPeriod,
                            const size_t& maxIterations)
       : _scanPeriod(scanPeriod),
-        _stackFrameNum(1),
-        _mapFrameNum(5),
+        _stackFrameNum(-1),
+        _mapFrameNum(-1),
         _frameCount(0),
         _mapFrameCount(0),
         _maxIterations(maxIterations),
@@ -466,32 +466,40 @@ void LaserMapping::process()
 
   // skip some frames?!?
   _frameCount++;
-  if (_frameCount < _stackFrameNum) {
+  if (_frameCount < _stackFrameNum && _stackFrameNum > 0) {
     return;
   }
   _frameCount = 0;
 
   pcl::PointXYZI pointSel;
 
+  /**************Part 1: Transformation**************/
+
   // relate incoming data to map
   // 将相关坐标转移到世界坐标系下->得到可用于建图的Lidar坐标
   transformAssociateToMap();
-  
+
   // 将上一时刻所有边特征转到世界坐标系下
   size_t laserCloudCornerLastNum = _laserCloudCornerLast->points.size();
   for (int i = 0; i < laserCloudCornerLastNum; i++) {
     pointAssociateToMap(_laserCloudCornerLast->points[i], pointSel);
     _laserCloudCornerStack->push_back(pointSel);
   }
-  
+
   // 将上一时刻所有面特征转到世界坐标系下
   size_t laserCloudSurfLastNum = _laserCloudSurfLast->points.size();
   for (int i = 0; i < laserCloudSurfLastNum; i++) {
     pointAssociateToMap(_laserCloudSurfLast->points[i], pointSel);
     _laserCloudSurfStack->push_back(pointSel);
   }
-  
+
+
+ /**************Part 2: Optimization**************/
   /*
+  将地图 Q_{k-1} 保存在一个10m的立方体中，若cube中的点与当
+  前帧中的点云 \bar{Q}_{k} 有重叠部分就把他们提取出来保存在
+  KD树中。我们找地图 Q_{k-1} 中的点时，要在特征点附近宽为10cm
+  的立方体邻域内搜索（实际代码中是10cm×10cm×5cm）
   _laserCloudCenWidth(10): 邻域宽度, cm为单位
   _laserCloudCenHeight(5): 邻域高度
   _laserCloudCenDepth(10): 邻域深度
@@ -499,14 +507,15 @@ void LaserMapping::process()
   _laserCloudHeight(11): 高方向个数
   _laserCloudDepth(21): 深度方向个数
   */
-  
+
   pcl::PointXYZI pointOnYAxis;  // 当前Lidar坐标系{L}y轴上的一点(0,10,0)
   pointOnYAxis.x = 0.0;
   pointOnYAxis.y = 10.0;
   pointOnYAxis.z = 0.0;
   pointAssociateToMap(pointOnYAxis, pointOnYAxis); // 转到世界坐标系{W}下
-  
+
   // cube中心位置索引
+  // 当坐标属于[-25,25]时，cube对应与(10,5,10)即正中心的那个cube。
   int centerCubeI = int((_transformTobeMapped.pos.x() + 25.0) / 50.0) + _laserCloudCenWidth;
   int centerCubeJ = int((_transformTobeMapped.pos.y() + 25.0) / 50.0) + _laserCloudCenHeight;
   int centerCubeK = int((_transformTobeMapped.pos.z() + 25.0) / 50.0) + _laserCloudCenDepth;
@@ -514,9 +523,8 @@ void LaserMapping::process()
   if (_transformTobeMapped.pos.x() + 25.0 < 0) centerCubeI--;
   if (_transformTobeMapped.pos.y() + 25.0 < 0) centerCubeJ--;
   if (_transformTobeMapped.pos.z() + 25.0 < 0) centerCubeK--;
-  
+
   // 如果取到的子cube在整个大cube的边缘则将点对应的cube的索引向中心方向挪动一个单位，这样做主要是截取边沿cube。
-  
   // 将点的指针向中心方向平移 Start -------
   while (centerCubeI < 3) {
     for (int j = 0; j < _laserCloudHeight; j++) {
@@ -619,20 +627,20 @@ void LaserMapping::process()
             j >= 0 && j < _laserCloudHeight &&
             k >= 0 && k < _laserCloudDepth) {
 
-          // 计算子cube对应的点坐标 
+          // 计算子cube对应的点坐标
           // NOTE: 由于ijk均为整数，坐标取值为中心点坐标
           float centerX = 50.0f * (i - _laserCloudCenWidth);
           float centerY = 50.0f * (j - _laserCloudCenHeight);
           float centerZ = 50.0f * (k - _laserCloudCenDepth);
 
           pcl::PointXYZI transform_pos = (pcl::PointXYZI) _transformTobeMapped.pos;
-          
+
           // 取邻近的8个点坐标
           bool isInLaserFOV = false;
           for (int ii = -1; ii <= 1; ii += 2) {
             for (int jj = -1; jj <= 1; jj += 2) {
               for (int kk = -1; kk <= 1; kk += 2) {
-                
+
                 /* 这里还需要判断一下该点是否属于当前Lidar的可视范围内，
                    可以根据余弦公式对距离范围进行推导。根据代码中的式子，
                    只要点在x轴±60°的范围内都认为是FOV中的点(作者这么做是
@@ -709,6 +717,16 @@ void LaserMapping::process()
 
 
   // run pose optimization
+  /*
+      做完这些工作以后，我们就有了在当前Lidar所在位置附近的所有地图特征点以及当前帧的点云特征点，
+      后面的工作就是怎么把这两坨点匹配在一起啦！于是我们再次拿出KD树，来寻找最邻近的5个点。对点
+      云协方差矩阵进行主成分分析：若这五个点分布在直线上，协方差矩阵的特征值包含一个元素显著大于
+      其余两个，与该特征值相关的特征向量表示所处直线的方向；若这五个点分布在平面上，协方差矩阵的
+      特征值存在一个显著小的元素，与该特征值相关的特征向量表示所处平面的法线方向。因此我们可以很
+      轻易的根据特征向量找到直线上两点从而利用论文中点到直线的距离公式构建优化问题(对优化问题有疑
+      问的同学请参考上一篇文章)。平面特征也是相同的思路。完成了优化问题的构建之后就可以对它进行求
+      解了，求解方法还是L-M迭代。这部分代码与laserOdometry部分的几乎一致
+  */
   optimizeTransformTobeMapped();
 
 
@@ -1074,7 +1092,7 @@ void LaserMapping::publishResult()
 {
   // publish new map cloud according to the input output ratio
   _mapFrameCount++;
-  if (_mapFrameCount >= _mapFrameNum) {
+  if (_mapFrameCount >= _mapFrameNum || _mapFrameNum < 0) {
     _mapFrameCount = 0;
 
     // accumulate map cloud

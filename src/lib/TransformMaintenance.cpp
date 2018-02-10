@@ -214,12 +214,18 @@ void TransformMaintenance::laserOdometryHandler(const nav_msgs::Odometry::ConstP
   _laserOdometryTrans2.setRotation(tf::Quaternion(-geoQuat.y, -geoQuat.z, geoQuat.x, geoQuat.w));
   _laserOdometryTrans2.setOrigin(tf::Vector3(_transformMapped[3], _transformMapped[4], _transformMapped[5]));
   _tfBroadcaster2.sendTransform(_laserOdometryTrans2);
-  
+
+  /*
+       以这个/integrated_to_init消息到底是什么？实际它就是融合后的Lidar轨迹，
+       说白了就是：有优化结果了就拿这一时刻的优化结果作为轨迹，没有优化结果只有里
+       程计结果了，就直接拿里程计结果作为这一时刻的轨迹。
+  */
+
   // write odom to file
   tf::Matrix3x3 result = tf::Matrix3x3(tf::Quaternion(geoQuat.z, -geoQuat.x, -geoQuat.y, geoQuat.w));
-  
+
   std::ofstream myfile;
-  myfile.open ("/home/cedricxie/Documents/Udacity/Didi_Challenge/catkin_ws/ros_bags/kitti/result.txt", std::ios_base::app);
+  myfile.open ("/home/cedricxie/Documents/Udacity/Didi_Challenge/catkin_ws/ros_bags/kitti/odometry/result.txt", std::ios_base::app);
   myfile << result[0][0] << " " << result[0][1] << " " << result[0][2] << " " << _transformMapped[3] << " "
          << result[1][0] << " " << result[1][1] << " " << result[1][2] << " " << _transformMapped[4] << " "
          << result[2][0] << " " << result[2][1] << " " << result[2][2] << " " << _transformMapped[5] << " " << " \n";
@@ -241,7 +247,7 @@ void TransformMaintenance::laserOdometryHandler(const nav_msgs::Odometry::ConstP
   _poseInPathMsg.pose.orientation.z = geoQuat.x;
   _poseInPathMsg.pose.orientation.w = geoQuat.w;
   _pathMsg.poses.push_back(_poseInPathMsg);
-  
+
   _pubOdomToPath.publish(_pathMsg);
 }
 

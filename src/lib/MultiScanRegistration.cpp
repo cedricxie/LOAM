@@ -49,6 +49,8 @@ MultiScanMapper::MultiScanMapper(const float& lowerBound,
 
 }
 
+
+
 void MultiScanMapper::set(const float &lowerBound,
                           const float &upperBound,
                           const uint16_t &nScanRings)
@@ -64,11 +66,6 @@ void MultiScanMapper::set(const float &lowerBound,
 int MultiScanMapper::getRingForAngle(const float& angle) {
   return int(((angle * 180 / M_PI) - _lowerBound) * _factor + 0.5);
 }
-
-
-
-
-
 
 MultiScanRegistration::MultiScanRegistration(const MultiScanMapper& scanMapper,
                                              const RegistrationParams& config)
@@ -128,7 +125,6 @@ bool MultiScanRegistration::setup(ros::NodeHandle& node,
     }
   }
 
-
   // subscribe to input cloud topic
   _subLaserCloud = node.subscribe<sensor_msgs::PointCloud2>
       ("/multi_scan_points", 2, &MultiScanRegistration::handleCloudMessage, this);
@@ -168,7 +164,7 @@ void MultiScanRegistration::process(const pcl::PointCloud<pcl::PointXYZ>& laserC
   // TODO: evaluate effect of change
   float startOri = -std::atan2(laserCloudIn[0].x, laserCloudIn[0].z);
   float endOri = -std::atan2(laserCloudIn[cloudSize - 1].x, laserCloudIn[cloudSize - 1].z) + 2 * float(M_PI);
-  
+
   if (endOri - startOri > 3 * M_PI) {
     endOri -= 2 * M_PI;
   } else if (endOri - startOri < M_PI) {
@@ -177,7 +173,7 @@ void MultiScanRegistration::process(const pcl::PointCloud<pcl::PointXYZ>& laserC
 
   bool halfPassed = false;
   pcl::PointXYZI point;
-  
+
   /**
    * 三维扫描仪并不像二维那样按照角度给出个距离值，从而保证每次的扫描都有
    * 相同的数据量。 PointCloud2接受到的点云的大小在变化，因此在数据到达时

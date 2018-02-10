@@ -452,8 +452,8 @@ void LaserOdometry::process()
 
   // reset flags, etc.
   reset();
-  
-  /********** Initialization *********/
+
+  /********** Part 1: Initialization *********/
   if (!_systemInited) {
     _cornerPointsLessSharp.swap(_lastCornerCloud);
     _surfPointsLessFlat.swap(_lastSurfaceCloud);
@@ -478,8 +478,9 @@ void LaserOdometry::process()
 
   size_t lastCornerCloudSize = _lastCornerCloud->points.size();
   size_t lastSurfaceCloudSize = _lastSurfaceCloud->points.size();
-  
-  // 上一时刻特征边(曲率大)上的点云个数大于10， 特征面内的点云大于100  
+
+  /********** Part 2: Feature Matching and Motion Estimation *********/
+  // 上一时刻特征边(曲率大)上的点云个数大于10， 特征面内的点云大于100
   // -> 保证足够多的特征点可用于t+1时刻的匹配
   if (lastCornerCloudSize > 10 && lastSurfaceCloudSize > 100) {
     std::vector<int> pointSearchInd(1);
@@ -496,14 +497,25 @@ void LaserOdometry::process()
     _pointSearchSurfInd2.resize(surfPointsFlatNum);
     _pointSearchSurfInd3.resize(surfPointsFlatNum);
 
-    // start of the iteration
+    // start of the solving iteration
+    /*
+           这里我们设定整个L-M运动估计的迭代次数为25次，
+           以保证运算效率。迭代部分又可分为：对特征边/面
+           上的点进行处理，构建Jaccobian矩阵，L-M运动
+           估计求解。
+    */
     for (size_t iterCount = 0; iterCount < _maxIterations; iterCount++) {
       pcl::PointXYZI pointSel, pointProj, tripod1, tripod2, tripod3;
       _laserCloudOri->clear();
       _coeffSel->clear();
-      
+
       /***** 1. 特征边上的点配准并构建Jaccobian *****/
       // find closest point for cornerPointsSharp
+      /*
+            特征线：利用KD树找点i在t时刻点云中最近的一点j，
+            并在j周围（上下几条线的范围内）找次近点l，于是
+            我们把（j，l）称为点i在t时刻点云中的对应。
+      */
       for (int i = 0; i < cornerPointsSharpNum; i++) {
         // 将点坐标转换到起始点云坐标系中
         // TODO: should do nothing if IMU not set?
@@ -512,26 +524,26 @@ void LaserOdometry::process()
         // 每迭代五次,搜索一次最近点和次临近点(降采样)
         if (iterCount % 5 == 0) {
           pcl::removeNaNFromPointCloud(*_lastCornerCloud, *_lastCornerCloud, indices);
-          
+
           // 找到pointSel(当前时刻边特征中的某一点)在laserCloudCornerLast中的1个最邻近点
 	        // -> 返回pointSearchInd(点对应的索引)  pointSearchSqDis(pointSel与对应点的欧氏距离)
           _lastCornerKDTree.nearestKSearch(pointSel, 1, pointSearchInd, pointSearchSqDis);
-          
+
           // 在最邻近点附近(向上下三条扫描线以内)找到次临近点
           int closestPointInd = -1, minPointInd2 = -1;
           if (pointSearchSqDis[0] < 25) {
             closestPointInd = pointSearchInd[0];
             int closestPointScan = int(_lastCornerCloud->points[closestPointInd].intensity);
-            
+
             // 从找得到的最邻近点开始，遍历所有边特征点
             float pointSqDis, minPointSqDis2 = 25;
-            
+
             // 向上三条线，找次临近点
             for (int j = closestPointInd + 1; j < cornerPointsSharpNum; j++) {
               if (int(_lastCornerCloud->points[j].intensity) > closestPointScan + 2.5) {
                 break;
               }
-              
+
               // 计算遍历点与最邻近点的距离(平方)
               pointSqDis = calcSquaredDiff(_lastCornerCloud->points[j], pointSel);
 
@@ -542,13 +554,13 @@ void LaserOdometry::process()
                 }
               }
             }
-            
+
             // 向下三条线，找次临近点
             for (int j = closestPointInd - 1; j >= 0; j--) {
               if (int(_lastCornerCloud->points[j].intensity) < closestPointScan - 2.5) {
                 break;
               }
-              
+
               // 计算遍历点与最邻近点的距离(平方)
               pointSqDis = calcSquaredDiff(_lastCornerCloud->points[j], pointSel);
 
@@ -568,12 +580,12 @@ void LaserOdometry::process()
         if (_pointSearchCornerInd2[i] >= 0) {
           tripod1 = _lastCornerCloud->points[_pointSearchCornerInd1[i]]; // 最邻近点
           tripod2 = _lastCornerCloud->points[_pointSearchCornerInd2[i]]; // 次临近点
-		
-	  // 当前点云的点坐标
+
+	        // 当前点云的点坐标
           float x0 = pointSel.x;
           float y0 = pointSel.y;
           float z0 = pointSel.z;
-	  // 上一时刻最邻近点的点坐标
+	        // 上一时刻最邻近点的点坐标
           float x1 = tripod1.x;
           float y1 = tripod1.y;
           float z1 = tripod1.z;
@@ -581,16 +593,16 @@ void LaserOdometry::process()
           float x2 = tripod2.x;
           float y2 = tripod2.y;
           float z2 = tripod2.z;
-	  // 文章中公式(2)的分子部分->分别作差并叉乘后的向量模长
+	        // 文章中公式(2)的分子部分->分别作差并叉乘后的向量模长
           float a012 = sqrt(((x0 - x1)*(y0 - y2) - (x0 - x2)*(y0 - y1))
                             * ((x0 - x1)*(y0 - y2) - (x0 - x2)*(y0 - y1))
                             + ((x0 - x1)*(z0 - z2) - (x0 - x2)*(z0 - z1))
                               * ((x0 - x1)*(z0 - z2) - (x0 - x2)*(z0 - z1))
                             + ((y0 - y1)*(z0 - z2) - (y0 - y2)*(z0 - z1))
                               * ((y0 - y1)*(z0 - z2) - (y0 - y2)*(z0 - z1)));
-	  // 文章中公式(2)分母部分 -> 两点间距离
+	        // 文章中公式(2)分母部分 -> 两点间距离
           float l12 = sqrt((x1 - x2)*(x1 - x2) + (y1 - y2)*(y1 - y2) + (z1 - z2)*(z1 - z2));
-	  // 向量[la；lb；lc] 为距离ld2分别对x0 y0 z0的偏导
+	        // 向量[la；lb；lc] 为距离ld2分别对x0 y0 z0的偏导
           float la = ((y1 - y2)*((x0 - x1)*(y0 - y2) - (x0 - x2)*(y0 - y1))
                       + (z1 - z2)*((x0 - x1)*(z0 - z2) - (x0 - x2)*(z0 - z1))) / a012 / l12;
 
@@ -617,17 +629,22 @@ void LaserOdometry::process()
           coeff.y = s * lb;
           coeff.z = s * lc;
           coeff.intensity = s * ld2;
-		
-	  // 满足阈值(ld2 < 0.5)，将特征点插入
+
+	        // 满足阈值(ld2 < 0.5)，将特征点插入
           if (s > 0.1 && ld2 != 0) {
             _laserCloudOri->push_back(_cornerPointsSharp->points[i]);
             _coeffSel->push_back(coeff);
           }
         }
       }
-      
+
       /***** 2. 特征面上的点配准并构建Jaccobian  *****/
       // find closest point for surfPointsFlat
+      /*
+             特征面：与特征线类似，先找最近点j，在j周围找l，
+             在j周围找m，将（j，l，m）称为点i在t时刻点云中
+             的对应。
+      */
       for (int i = 0; i < surfPointsFlatNum; i++) {
         transformToStart(_surfPointsFlat->points[i], pointSel);
 
@@ -688,7 +705,7 @@ void LaserOdometry::process()
           tripod1 = _lastSurfaceCloud->points[_pointSearchSurfInd1[i]];
           tripod2 = _lastSurfaceCloud->points[_pointSearchSurfInd2[i]];
           tripod3 = _lastSurfaceCloud->points[_pointSearchSurfInd3[i]];
-		
+
           // 向量[pa；pb；pc] = 点到面的距离对x0 y0 z0的偏导
           float pa = (tripod2.y - tripod1.y) * (tripod3.z - tripod1.z)
                      - (tripod3.y - tripod1.y) * (tripod2.z - tripod1.z);
@@ -728,9 +745,9 @@ void LaserOdometry::process()
           }
         }
       }
-	    
+
       /***** 3. L-M运动估计求解 *****/
-      // 匹配到的点的个数(即存在多少个约束) 
+      // 匹配到的点的个数(即存在多少个约束)
       int pointSelNum = _laserCloudOri->points.size();
       if (pointSelNum < 10) {
         continue;
@@ -742,13 +759,13 @@ void LaserOdometry::process()
       Eigen::VectorXf matB(pointSelNum);
       Eigen::Matrix<float,6,1> matAtB;
       Eigen::Matrix<float,6,1> matX;
-	    
+
       // 构建Jaccobian矩阵
       /**
-	* 采用Levenberg-Marquardt计算
-	* 首先建立当前时刻Lidar坐标系下提取到的特征点与点到直线/平面
-	* 的约束方程。而后对约束方程求对坐标变换(3旋转+3平移)的偏导
-	* 公式参见论文(2)-(8)
+	       * 采用Levenberg-Marquardt计算
+	       * 首先建立当前时刻Lidar坐标系下提取到的特征点与点到直线/平面
+	       * 的约束方程。而后对约束方程求对坐标变换(3旋转+3平移)的偏导
+	       * 公式参见论文(2)-(8)
       **/
       for (int i = 0; i < pointSelNum; i++) {
         const pcl::PointXYZI& pointOri = _laserCloudOri->points[i]; // 当前时刻点坐标
@@ -807,7 +824,7 @@ void LaserOdometry::process()
         matA(i, 5) = atz;
         matB(i, 0) = -0.05 * d2;
       }
-	    
+
       // 最小二乘计算(QR分解法)
       matAt = matA.transpose();
       matAtA = matAt * matA;
@@ -877,7 +894,7 @@ void LaserOdometry::process()
     }
   }
 
-  /****** Transformation *******/
+  /********** Part 3: Transformation *********/
   // 算出了两坨点云间的相对运动，但他们是在这两帧点云的局部坐标系下的，我们需要把它转换到世界坐标系下，因此需要进行转换。
   Angle rx, ry, rz;
   // 计算旋转角的累计变化量
