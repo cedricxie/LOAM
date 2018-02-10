@@ -34,9 +34,12 @@
 #define LOAM_COMMON_H
 
 #include <ros/ros.h>
+#include <ros/console.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/point_types.h>
+#include <pcl/common/eigen.h>
+#include <pcl/common/transforms.h>
 
 
 namespace loam {

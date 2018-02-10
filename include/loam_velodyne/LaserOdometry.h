@@ -55,7 +55,7 @@ class LaserOdometry {
 public:
   explicit LaserOdometry(const float& scanPeriod = 0.1,
                          const uint16_t& ioRatio = 1,
-                         const size_t& maxIterations = 25);
+                         const size_t& maxIterations = 30);
 
   /** \brief Setup component.
    *

@@ -59,7 +59,7 @@ LaserOdometry::LaserOdometry(const float& scanPeriod,
         _frameCount(0),
         _maxIterations(maxIterations),
         _deltaTAbort(0.1),
-        _deltaRAbort(0.1),
+        _deltaRAbort(0.01),
         _cornerPointsSharp(new pcl::PointCloud<pcl::PointXYZI>()),
         _cornerPointsLessSharp(new pcl::PointCloud<pcl::PointXYZI>()),
         _surfPointsFlat(new pcl::PointCloud<pcl::PointXYZI>()),
@@ -287,7 +287,7 @@ void LaserOdometry::accumulateRotation(Angle cx, Angle cy, Angle cz,
                                        Angle lx, Angle ly, Angle lz,
                                        Angle &ox, Angle &oy, Angle &oz)
 {
-  float srx = lx.cos()*cx.cos()*ly.sin()*cz.sin()
+  /*float srx = lx.cos()*cx.cos()*ly.sin()*cz.sin()
             - cx.cos()*cz.cos()*lx.sin()
             - lx.cos()*ly.cos()*cx.sin();
   ox = -asin(srx);
@@ -306,7 +306,15 @@ void LaserOdometry::accumulateRotation(Angle cx, Angle cy, Angle cz,
   float crzcrx = lx.cos()*lz.cos()*cx.cos()*cz.cos()
                - cx.cos()*cz.sin()*(ly.cos()*lz.sin() - lz.cos()*lx.sin()*ly.sin())
                - cx.sin()*(ly.sin()*lz.sin() + ly.cos()*lz.cos()*lx.sin());
-  oz = atan2(srzcrx / ox.cos(), crzcrx / ox.cos());
+  oz = atan2(srzcrx / ox.cos(), crzcrx / ox.cos());*/
+  Eigen::Affine3f current = pcl::getTransformation(0, 0, 0, cy.rad(), cx.rad(), cz.rad());
+  Eigen::Affine3f last = pcl::getTransformation(0, 0, 0, ly.rad(), lx.rad(), lz.rad());
+
+  float oy_f, ox_f, oz_f;
+  pcl::getEulerAngles(last*current, oy_f, ox_f, oz_f);
+  ox = ox_f;
+  oy = oy_f;
+  oz = oz_f;
 }
 
 
@@ -522,7 +530,7 @@ void LaserOdometry::process()
         transformToStart(_cornerPointsSharp->points[i], pointSel);
 
         // 每迭代五次,搜索一次最近点和次临近点(降采样)
-        if (iterCount % 5 == 0) {
+        if (iterCount % 2 == 0) {
           pcl::removeNaNFromPointCloud(*_lastCornerCloud, *_lastCornerCloud, indices);
 
           // 找到pointSel(当前时刻边特征中的某一点)在laserCloudCornerLast中的1个最邻近点
@@ -648,7 +656,7 @@ void LaserOdometry::process()
       for (int i = 0; i < surfPointsFlatNum; i++) {
         transformToStart(_surfPointsFlat->points[i], pointSel);
 
-        if (iterCount % 5 == 0) {
+        if (iterCount % 2 == 0) {
           _lastSurfaceKDTree.nearestKSearch(pointSel, 1, pointSearchInd, pointSearchSqDis);
           int closestPointInd = -1, minPointInd2 = -1, minPointInd3 = -1;
           if (pointSearchSqDis[0] < 25) {
@@ -889,26 +897,32 @@ void LaserOdometry::process()
                           pow(matX(5, 0) * 100, 2));
 
       if (deltaR < _deltaRAbort && deltaT < _deltaTAbort) {
+        ROS_DEBUG("Optimization Done: %i, %i, %f, %f", pointSelNum, int(iterCount), deltaR, deltaT);
         break;
       }
     }
   }
 
   /********** Part 3: Transformation *********/
+  ROS_DEBUG("Before Transformation");
+  ROS_DEBUG("_transformSum.rot %f, %f, %f", _transformSum.rot_x.deg(), _transformSum.rot_y.deg(), _transformSum.rot_z.deg());
+  ROS_DEBUG("_transform.rot %f, %f, %f", _transform.rot_x.deg(), _transform.rot_y.deg(), _transform.rot_z.deg());
+
   // 算出了两坨点云间的相对运动，但他们是在这两帧点云的局部坐标系下的，我们需要把它转换到世界坐标系下，因此需要进行转换。
   Angle rx, ry, rz;
   // 计算旋转角的累计变化量
+  float corr = 1.0; // TODO: 1.05 in the original code
   accumulateRotation(_transformSum.rot_x,
                      _transformSum.rot_y,
                      _transformSum.rot_z,
                      -_transform.rot_x,
-                     -_transform.rot_y.rad() * 1.05,
+                     -_transform.rot_y.rad() * corr,
                      -_transform.rot_z,
                      rx, ry, rz);
 
   Vector3 v( _transform.pos.x()        - _imuShiftFromStart.x(),
              _transform.pos.y()        - _imuShiftFromStart.y(),
-             _transform.pos.z() * 1.05 - _imuShiftFromStart.z() );
+             _transform.pos.z() * corr - _imuShiftFromStart.z() );
   rotateZXY(v, rz, rx, ry);
   Vector3 trans = _transformSum.pos - v;
 
@@ -921,6 +935,9 @@ void LaserOdometry::process()
   _transformSum.rot_y = ry;
   _transformSum.rot_z = rz;
   _transformSum.pos = trans;
+
+  ROS_DEBUG("After Transformation");
+  ROS_DEBUG("_transformSum.rot %f, %f, %f", _transformSum.rot_x.deg(), _transformSum.rot_y.deg(), _transformSum.rot_z.deg());
 
   transformToEnd(_cornerPointsLessSharp);
   transformToEnd(_surfPointsLessFlat);
