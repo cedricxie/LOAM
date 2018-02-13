@@ -142,7 +142,7 @@ Visualization Manager:
       Size (Pixels): 1
       Size (m): 0.00999999978
       Style: Points
-      Topic: /laser_cloud_surround
+      Topic: /velodyne_cloud_3
       Unreliable: false
       Use Fixed Frame: true
       Use rainbow: true
@@ -269,26 +269,26 @@ Visualization Manager:
   Value: true
   Views:
     Current:
-      Class: rviz/ThirdPersonFollower
-      Distance: 501.547211
+      Class: rviz/Orbit
+      Distance: 274.877319
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.0599999987
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 1.72561193
-        Y: -234.823227
-        Z: 1.13709903e-05
+        X: 9.66210842
+        Y: -27.2605038
+        Z: -8.42657089
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.0500000007
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.00999999978
-      Pitch: -0.84979713
+      Pitch: -0.46979773
       Target Frame: aft_mapped
-      Value: ThirdPersonFollower (rviz)
-      Yaw: 1.54221475
+      Value: Orbit (rviz)
+      Yaw: 1.44721484
     Saved: ~
 Window Geometry:
   Displays:

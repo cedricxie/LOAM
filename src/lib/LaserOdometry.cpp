@@ -58,8 +58,8 @@ LaserOdometry::LaserOdometry(const float& scanPeriod,
         _systemInited(false),
         _frameCount(0),
         _maxIterations(maxIterations),
-        _deltaTAbort(0.1),
-        _deltaRAbort(0.01),
+        _deltaTAbort(0.05),
+        _deltaRAbort(0.05),
         _cornerPointsSharp(new pcl::PointCloud<pcl::PointXYZI>()),
         _cornerPointsLessSharp(new pcl::PointCloud<pcl::PointXYZI>()),
         _surfPointsFlat(new pcl::PointCloud<pcl::PointXYZI>()),
@@ -194,6 +194,7 @@ size_t LaserOdometry::transformToEnd(pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud
     pcl::PointXYZI& point = cloud->points[i];
 
     float s = 10 * (point.intensity - int(point.intensity));
+    //float s = 0.0;
 
     point.x -= s * _transform.pos.x();
     point.y -= s * _transform.pos.y();
@@ -206,12 +207,17 @@ size_t LaserOdometry::transformToEnd(pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud
     rotateZXY(point, rz, rx, ry);
     rotateYXZ(point, _transform.rot_y, _transform.rot_x, _transform.rot_z);
 
+    if (fabs(rx.deg()) > 10.0 || fabs(ry.deg()) > 10.0 || fabs(rz.deg()) > 10.0) {
+      // ROS_INFO("[laserOdometry] LARGE transformToEnd: %f, %f, %f || s: %f", rz.deg(), rx.deg(), ry.deg(), s);
+    }
+
     point.x += _transform.pos.x() - _imuShiftFromStart.x();
     point.y += _transform.pos.y() - _imuShiftFromStart.y();
     point.z += _transform.pos.z() - _imuShiftFromStart.z();
 
     rotateZXY(point, _imuRollStart, _imuPitchStart, _imuYawStart);
     rotateYXZ(point, -_imuYawEnd, -_imuPitchEnd, -_imuRollEnd);
+    // ROS_DEBUG("[laserOdometry] transformToEnd: %f,%f, %f", _imuRollStart.deg(), _imuPitchEnd.deg(), _imuYawStart.deg());
   }
 
   return cloudSize;
@@ -458,6 +464,9 @@ void LaserOdometry::process()
     return;
   }
 
+  // ROS_DEBUG("[laserOdometry] started");
+  ecl::StopWatch stopWatch;
+
   // reset flags, etc.
   reset();
 
@@ -482,6 +491,7 @@ void LaserOdometry::process()
 
   _frameCount++;
   _transform.pos -= _imuVeloFromStart * _scanPeriod;
+  bool isConverged = false;
 
 
   size_t lastCornerCloudSize = _lastCornerCloud->points.size();
@@ -897,18 +907,25 @@ void LaserOdometry::process()
                           pow(matX(5, 0) * 100, 2));
 
       if (deltaR < _deltaRAbort && deltaT < _deltaTAbort) {
-        ROS_DEBUG("Optimization Done: %i, %i, %f, %f", pointSelNum, int(iterCount), deltaR, deltaT);
+        ROS_DEBUG("[laserOdometry] Optimization Done: %i, %i, %f, %f", pointSelNum, int(iterCount), deltaR, deltaT);
+        isConverged = true;
         break;
       }
+    }
+    if (!isConverged) {
+      ROS_DEBUG("[laserOdometry] Optimization Incomplete");
     }
   }
 
   /********** Part 3: Transformation *********/
-  ROS_DEBUG("Before Transformation");
-  ROS_DEBUG("_transformSum.rot %f, %f, %f", _transformSum.rot_x.deg(), _transformSum.rot_y.deg(), _transformSum.rot_z.deg());
-  ROS_DEBUG("_transform.rot %f, %f, %f", _transform.rot_x.deg(), _transform.rot_y.deg(), _transform.rot_z.deg());
+  //ROS_DEBUG("Before Transformation");
+  //ROS_DEBUG("_transformSum.rot %f, %f, %f", _transformSum.rot_x.deg(), _transformSum.rot_y.deg(), _transformSum.rot_z.deg());
+  if (_transform.rot_x.deg() > 1.0 || _transform.rot_y.deg() > 1.0 || _transform.rot_z.deg() > 1.0 )
+  {
+    // ROS_INFO("[laserOdometry] LARGE _transform.rot %f, %f, %f", _transform.rot_x.deg(), _transform.rot_y.deg(), _transform.rot_z.deg());
+  }
 
-  // 算出了两坨点云间的相对运动，但他们是在这两帧点云的局部坐标系下的，我们需要把它转换到世界坐标系下，因此需要进行转换。
+  // 算出了两坨点云间的相对运动，他们是在这两帧点云的局部坐标系下的
   Angle rx, ry, rz;
   // 计算旋转角的累计变化量
   float corr = 1.0; // TODO: 1.05 in the original code
@@ -936,8 +953,9 @@ void LaserOdometry::process()
   _transformSum.rot_z = rz;
   _transformSum.pos = trans;
 
-  ROS_DEBUG("After Transformation");
-  ROS_DEBUG("_transformSum.rot %f, %f, %f", _transformSum.rot_x.deg(), _transformSum.rot_y.deg(), _transformSum.rot_z.deg());
+  //ROS_DEBUG("After Transformation");
+  //ROS_DEBUG("_transformSum.rot %f, %f, %f", _transformSum.rot_x.deg(), _transformSum.rot_y.deg(), _transformSum.rot_z.deg());
+  //ROS_DEBUG("_transformSum.pos %f, %f, %f", _transformSum.pos.x(), _transformSum.pos.y(), _transformSum.pos.z());
 
   transformToEnd(_cornerPointsLessSharp);
   transformToEnd(_surfPointsLessFlat);
@@ -954,6 +972,8 @@ void LaserOdometry::process()
   }
 
   publishResult();
+
+  ROS_DEBUG_STREAM("[laserOdometry] took " << stopWatch.elapsed());
 }
 
 
@@ -977,6 +997,7 @@ void LaserOdometry::publishResult()
 
   _laserOdometryTrans.stamp_ = _timeSurfPointsLessFlat;
   _laserOdometryTrans.setRotation(tf::Quaternion(-geoQuat.y, -geoQuat.z, geoQuat.x, geoQuat.w));
+  // _laserOdometryTrans.setRotation(tf::Quaternion(geoQuat.x, geoQuat.y, geoQuat.z, geoQuat.w));
   _laserOdometryTrans.setOrigin(tf::Vector3( _transformSum.pos.x(), _transformSum.pos.y(), _transformSum.pos.z()) );
   _tfBroadcaster.sendTransform(_laserOdometryTrans);
 
@@ -988,7 +1009,7 @@ void LaserOdometry::publishResult()
 
     publishCloudMsg(_pubLaserCloudCornerLast, *_lastCornerCloud, sweepTime, "/camera");
     publishCloudMsg(_pubLaserCloudSurfLast, *_lastSurfaceCloud, sweepTime, "/camera");
-    publishCloudMsg(_pubLaserCloudFullRes, *_laserCloud, sweepTime, "/camera");
+    publishCloudMsg(_pubLaserCloudFullRes, *_laserCloud, sweepTime, "/laser_odom");
   }
 }
 

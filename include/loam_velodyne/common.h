@@ -41,6 +41,7 @@
 #include <pcl/common/eigen.h>
 #include <pcl/common/transforms.h>
 
+#include <ecl/time/stopwatch.hpp>
 
 namespace loam {
 

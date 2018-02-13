@@ -56,7 +56,7 @@ LaserMapping::LaserMapping(const float& scanPeriod,
         _frameCount(0),
         _mapFrameCount(0),
         _maxIterations(maxIterations),
-        _deltaTAbort(0.05),
+        _deltaTAbort(0.01),
         _deltaRAbort(0.01),
         _laserCloudCenWidth(10),
         _laserCloudCenHeight(5),
@@ -461,6 +461,8 @@ void LaserMapping::process()
     return;
   }
 
+  ecl::StopWatch stopWatch;
+
   // reset flags, etc.
   reset();
 
@@ -791,6 +793,8 @@ void LaserMapping::process()
 
   // publish result
   publishResult();
+
+  ROS_DEBUG_STREAM("[laserMapping] took " << stopWatch.elapsed());
 }
 
 
@@ -800,6 +804,8 @@ void LaserMapping::optimizeTransformTobeMapped()
   if (_laserCloudCornerFromMap->points.size() <= 10 || _laserCloudSurfFromMap->points.size() <= 100) {
     return;
   }
+
+  bool isConverged = false;
 
   pcl::PointXYZI pointSel, pointOri, pointProj, coeff;
 
@@ -1079,8 +1085,13 @@ void LaserMapping::optimizeTransformTobeMapped()
                         pow(matX(5, 0) * 100, 2));
 
     if (deltaR < _deltaRAbort && deltaT < _deltaTAbort) {
+      ROS_DEBUG("[laserMapping] Optimization Done: %i, %f, %f", int(iterCount), deltaR, deltaT);
+      isConverged = true;
       break;
     }
+  }
+  if (!isConverged) {
+    ROS_DEBUG("[laserMapping] Optimization Incomplete");
   }
 
   transformUpdate();
@@ -1096,6 +1107,7 @@ void LaserMapping::publishResult()
     _mapFrameCount = 0;
 
     // accumulate map cloud
+    // TODO: modify to include full map as output
     _laserCloudSurround->clear();
     size_t laserCloudSurroundNum = _laserCloudSurroundInd.size();
     for (int i = 0; i < laserCloudSurroundNum; i++) {

@@ -32,7 +32,7 @@
 
 #include "loam_velodyne/MultiScanRegistration.h"
 #include "math_utils.h"
-
+#include <fstream>
 #include <pcl_conversions/pcl_conversions.h>
 
 
@@ -149,8 +149,20 @@ void MultiScanRegistration::handleCloudMessage(const sensor_msgs::PointCloud2Con
 }
 
 
+/*
+void convertKITTI(pcl::PointXYZ& point)
+{
+  float z = point.x;
+  float x = point.y;
+  float y = point.z;
+  point.x = x;
+  point.y = y;
+  point.z = z;
+}
+*/
 
-void MultiScanRegistration::process(const pcl::PointCloud<pcl::PointXYZ>& laserCloudIn,
+
+void MultiScanRegistration::process(pcl::PointCloud<pcl::PointXYZ>& laserCloudIn,
                                     const ros::Time& scanTime)
 {
   size_t cloudSize = laserCloudIn.size();
@@ -158,12 +170,29 @@ void MultiScanRegistration::process(const pcl::PointCloud<pcl::PointXYZ>& laserC
   // reset internal buffers and set IMU start state based on current scan time
   reset(scanTime);
 
+  // convertKITTI(laserCloudIn[0]);
+  // convertKITTI(laserCloudIn[cloudSize - 1]);
+  pcl::PointXYZI pointStart;
+  pointStart.z = laserCloudIn[0].x;
+  pointStart.x = laserCloudIn[0].y;
+  pointStart.y = laserCloudIn[0].z;
+  pcl::PointXYZI pointEnd;
+  pointEnd.z = laserCloudIn[cloudSize - 1].x;
+  pointEnd.x = laserCloudIn[cloudSize - 1].y;
+  pointEnd.y = laserCloudIn[cloudSize - 1].z;
+
+    /**
+     * 三维扫描仪并不像二维那样按照角度给出个距离值，从而保证每次的扫描都有
+     * 相同的数据量。 PointCloud2接受到的点云的大小在变化，因此在数据到达时
+     * 需要一些运算来判断点的一些特征。
+     */
+
   // determine scan start and end orientations
   //float startOri = -std::atan2(laserCloudIn[0].y, laserCloudIn[0].x);
   //float endOri = -std::atan2(laserCloudIn[cloudSize - 1].y, laserCloudIn[cloudSize - 1].x) + 2 * float(M_PI);
   // TODO: evaluate effect of change
-  float startOri = -std::atan2(laserCloudIn[0].x, laserCloudIn[0].z);
-  float endOri = -std::atan2(laserCloudIn[cloudSize - 1].x, laserCloudIn[cloudSize - 1].z) + 2 * float(M_PI);
+  float startOri = -std::atan2(pointStart.x, pointStart.z);
+  float endOri = -std::atan2(pointEnd.x, pointEnd.z) + 2 * float(M_PI);
 
   if (endOri - startOri > 3 * M_PI) {
     endOri -= 2 * M_PI;
@@ -174,16 +203,14 @@ void MultiScanRegistration::process(const pcl::PointCloud<pcl::PointXYZ>& laserC
   bool halfPassed = false;
   pcl::PointXYZI point;
 
-  /**
-   * 三维扫描仪并不像二维那样按照角度给出个距离值，从而保证每次的扫描都有
-   * 相同的数据量。 PointCloud2接受到的点云的大小在变化，因此在数据到达时
-   * 需要一些运算来判断点的一些特征。
-   */
   /* 将点划到不同的线中 */
   std::vector<pcl::PointCloud<pcl::PointXYZI> > laserCloudScans(_scanMapper.getNumberOfScanRings());
 
   // extract valid points from input cloud
+  int counter_invalid_point = 0;
   for (int i = 0; i < cloudSize; i++) {
+
+    // convertKITTI(laserCloudIn[i]);
     point.x = laserCloudIn[i].y;
     point.y = laserCloudIn[i].z;
     point.z = laserCloudIn[i].x;
@@ -209,6 +236,12 @@ void MultiScanRegistration::process(const pcl::PointCloud<pcl::PointXYZ>& laserC
 
     // calculate horizontal point angle
     float ori = -std::atan2(point.x, point.z);
+
+    std::ofstream myfile;
+    myfile.open ("/home/cedricxie/Documents/Udacity/Didi_Challenge/catkin_ws/ros_bags/kitti/odometry/point_cloud.txt", std::ios_base::app);
+    myfile << i << " " << ori << " " << point.x << " " << point.z << " " << scanID << " \n";
+    myfile.close();
+
     if (!halfPassed) {
       if (ori < startOri - M_PI / 2) {
         ori += 2 * M_PI;
@@ -228,9 +261,29 @@ void MultiScanRegistration::process(const pcl::PointCloud<pcl::PointXYZ>& laserC
         ori -= 2 * M_PI;
       }
     }
-
+    /*
+    IMPORTANT NOTE: Note that the velodyne scanner takes depth measurements
+    continuously while rotating around its vertical axis (in contrast to the cameras,
+    which are triggered at a certain point in time). This effect has been
+    eliminated from this postprocessed data by compensating for the egomotion!!
+    Note that this is in contrast to the raw data.
+    */
     // calculate relative scan time based on point orientation
     float relTime = _config.scanPeriod * (ori - startOri) / (endOri - startOri);
+    // float relTime =  0.0;
+    if (relTime < 0 )
+    {
+      // relTime = _config.scanPeriod * (ori + 2.0 * M_PI - startOri) / (endOri - startOri);
+      // ROS_INFO("[multiScanRegistration] relTime %f, %f, %f, %f, %f, %d", -std::atan2(point.x, point.z), ori, startOri, -std::atan2(pointEnd.x, pointEnd.z), endOri, halfPassed);
+    }
+    if (relTime > 0.1 )
+    {
+      // relTime = _config.scanPeriod * (ori - 2.0 * M_PI - startOri) / (endOri - startOri);
+      //ROS_INFO("[multiScanRegistration] relTime %f, %f, %f, %f, %f, %d", -std::atan2(point.x, point.z), ori, startOri, -std::atan2(pointEnd.x, pointEnd.z), endOri, halfPassed);
+      // counter_invalid_point++;
+      // continue;
+    }
+
     point.intensity = scanID + relTime;
 
     // project point to the start of the sweep using corresponding IMU data
@@ -241,6 +294,8 @@ void MultiScanRegistration::process(const pcl::PointCloud<pcl::PointXYZ>& laserC
 
     laserCloudScans[scanID].push_back(point);
   }
+
+  // ROS_INFO("[multiScanRegistration] invalid point %d, out of %d", counter_invalid_point, int(cloudSize));
 
   // construct sorted full resolution cloud
   cloudSize = 0;

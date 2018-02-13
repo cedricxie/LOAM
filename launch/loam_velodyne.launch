@@ -1,5 +1,7 @@
 <launch>
 
+  <env name="ROSCONSOLE_CONFIG_FILE" value="$(find loam_velodyne)/custom_ros_console.conf"/>
+
   <arg name="rviz" default="true" />
   <arg name="scanPeriod" default="0.1" />
 

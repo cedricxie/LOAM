@@ -88,7 +88,7 @@ typedef struct IMUState2 {
 class LaserMapping {
 public:
   explicit LaserMapping(const float& scanPeriod = 0.1,
-                        const size_t& maxIterations = 30);
+                        const size_t& maxIterations = 40);
 
   /** \brief Setup component in active mode.
    *

@@ -126,9 +126,10 @@ public:
    * @param laserCloudIn the new input cloud to process
    * @param scanTime the scan (message) timestamp
    */
-  void process(const pcl::PointCloud<pcl::PointXYZ>& laserCloudIn,
+  void process(pcl::PointCloud<pcl::PointXYZ>& laserCloudIn,
                const ros::Time& scanTime);
 
+  //void convertKITTI(pcl::PointXYZ& point);
 
 protected:
   int _systemDelay;             ///< system startup delay counter

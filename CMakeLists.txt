@@ -8,14 +8,15 @@ find_package(catkin REQUIRED COMPONENTS
   roscpp
   rospy
   std_msgs
-  tf)
+  tf
+  ecl_time)
 
 find_package(Eigen3 REQUIRED)
 find_package(PCL REQUIRED)
 
 include_directories(
   include
-	${catkin_INCLUDE_DIRS} 
+	${catkin_INCLUDE_DIRS}
 	#${EIGEN3_INCLUDE_DIR}
 	${PCL_INCLUDE_DIRS})
 
@@ -62,5 +63,3 @@ if (CATKIN_ENABLE_TESTING)
       laserMapping
       transformMaintenance)
 endif()
-
-

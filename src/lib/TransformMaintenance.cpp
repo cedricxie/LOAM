@@ -199,6 +199,10 @@ void TransformMaintenance::laserOdometryHandler(const nav_msgs::Odometry::ConstP
   // Lidar在世界坐标系下的姿态
   geoQuat = tf::createQuaternionMsgFromRollPitchYaw
       (_transformMapped[2], -_transformMapped[0], -_transformMapped[1]);
+
+  // ROS_DEBUG("After Mapped");
+  // ROS_DEBUG("_transformMapped.rot %f, %f, %f", _transformMapped[0]/M_PI*180.0, _transformMapped[1]/M_PI*180.0, _transformMapped[2]/M_PI*180.0);
+
   // 发布Lidar在世界坐标系下的位姿
   _laserOdometry2.header.stamp = laserOdometry->header.stamp;
   _laserOdometry2.pose.pose.orientation.x = -geoQuat.y;
