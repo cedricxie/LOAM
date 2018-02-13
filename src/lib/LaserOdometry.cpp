@@ -207,8 +207,8 @@ size_t LaserOdometry::transformToEnd(pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud
     rotateZXY(point, rz, rx, ry);
     rotateYXZ(point, _transform.rot_y, _transform.rot_x, _transform.rot_z);
 
-    if (fabs(rx.deg()) > 10.0 || fabs(ry.deg()) > 10.0 || fabs(rz.deg()) > 10.0) {
-      // ROS_INFO("[laserOdometry] LARGE transformToEnd: %f, %f, %f || s: %f", rz.deg(), rx.deg(), ry.deg(), s);
+    if (fabs(rx.deg()) > 5.0 || fabs(ry.deg()) > 5.0 || fabs(rz.deg()) > 5.0) {
+       ROS_INFO("[laserOdometry] LARGE transformToEnd: %f, %f, %f || s: %f", rz.deg(), rx.deg(), ry.deg(), s);
     }
 
     point.x += _transform.pos.x() - _imuShiftFromStart.x();
@@ -922,7 +922,7 @@ void LaserOdometry::process()
   //ROS_DEBUG("_transformSum.rot %f, %f, %f", _transformSum.rot_x.deg(), _transformSum.rot_y.deg(), _transformSum.rot_z.deg());
   if (_transform.rot_x.deg() > 1.0 || _transform.rot_y.deg() > 1.0 || _transform.rot_z.deg() > 1.0 )
   {
-    // ROS_INFO("[laserOdometry] LARGE _transform.rot %f, %f, %f", _transform.rot_x.deg(), _transform.rot_y.deg(), _transform.rot_z.deg());
+    ROS_INFO("[laserOdometry] LARGE _transform.rot %f, %f, %f", _transform.rot_x.deg(), _transform.rot_y.deg(), _transform.rot_z.deg());
   }
 
   // 算出了两坨点云间的相对运动，他们是在这两帧点云的局部坐标系下的

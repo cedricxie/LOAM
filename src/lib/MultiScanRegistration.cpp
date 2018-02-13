@@ -190,24 +190,31 @@ void MultiScanRegistration::process(pcl::PointCloud<pcl::PointXYZ>& laserCloudIn
   // determine scan start and end orientations
   //float startOri = -std::atan2(laserCloudIn[0].y, laserCloudIn[0].x);
   //float endOri = -std::atan2(laserCloudIn[cloudSize - 1].y, laserCloudIn[cloudSize - 1].x) + 2 * float(M_PI);
-  // TODO: evaluate effect of change
-  float startOri = -std::atan2(pointStart.x, pointStart.z);
+  /*float startOri = -std::atan2(pointStart.x, pointStart.z);
   float endOri = -std::atan2(pointEnd.x, pointEnd.z) + 2 * float(M_PI);
 
   if (endOri - startOri > 3 * M_PI) {
     endOri -= 2 * M_PI;
   } else if (endOri - startOri < M_PI) {
     endOri += 2 * M_PI;
-  }
+  }*/
+
+  // TODO: evaluate effect of change
+  float startOri = 0.0;
+  float endOri = 2 * float(M_PI);
 
   bool halfPassed = false;
-  pcl::PointXYZI point;
+  int counter_invalid_point = 0;
+  int scanID = 63;
+  bool negPassed = false;
+  bool posPassed = false;
+  float peakThresh = M_PI / 4.0;
+  pcl::PointXYZI point, pointPrev;
 
   /* 将点划到不同的线中 */
   std::vector<pcl::PointCloud<pcl::PointXYZI> > laserCloudScans(_scanMapper.getNumberOfScanRings());
 
   // extract valid points from input cloud
-  int counter_invalid_point = 0;
   for (int i = 0; i < cloudSize; i++) {
 
     // convertKITTI(laserCloudIn[i]);
@@ -228,21 +235,47 @@ void MultiScanRegistration::process(pcl::PointCloud<pcl::PointXYZ>& laserCloudIn
     }
 
     // calculate vertical point angle and scan ID
-    float angle = std::atan(point.y / std::sqrt(point.x * point.x + point.z * point.z));
+    /*float angle = std::atan(point.y / std::sqrt(point.x * point.x + point.z * point.z));
     int scanID = _scanMapper.getRingForAngle(angle);
     if (scanID >= _scanMapper.getNumberOfScanRings() || scanID < 0 ){
       continue;
-    }
+    }*/
 
     // calculate horizontal point angle
     float ori = -std::atan2(point.x, point.z);
 
-    std::ofstream myfile;
-    myfile.open ("/home/cedricxie/Documents/Udacity/Didi_Challenge/catkin_ws/ros_bags/kitti/odometry/point_cloud.txt", std::ios_base::app);
-    myfile << i << " " << ori << " " << point.x << " " << point.z << " " << scanID << " \n";
-    myfile.close();
+    if (i > 0) {
+      if (ori < - peakThresh) {
+        negPassed = true;
+      }
+      if (ori > peakThresh) {
+        posPassed = true;
+      }
+      float oriPrev = -std::atan2(pointPrev.x, pointPrev.z);
+      if (ori < 0.0 && oriPrev > 0.0 && negPassed && posPassed) {
+        scanID--;
+        negPassed = false;
+        posPassed = false;
+      }
+    }
 
-    if (!halfPassed) {
+    if (scanID < 0 ) {
+      /*std::ofstream myfile;
+      myfile.open ("/home/cedricxie/Documents/Udacity/Didi_Challenge/catkin_ws/ros_bags/kitti/odometry/point_cloud.txt", std::ios_base::app);
+      for (int ii = 0; ii < cloudSize; ii++) {
+        pcl::PointXYZI pointTemp;
+        pointTemp.x = laserCloudIn[ii].y;
+        pointTemp.y = laserCloudIn[ii].z;
+        pointTemp.z = laserCloudIn[ii].x;
+        float oriTemp = -std::atan2(pointTemp.x, pointTemp.z);
+        myfile << ii << " " << oriTemp << " " << pointTemp.x << " " << pointTemp.z << " " << scanID << " \n";
+      }
+      myfile.close();*/
+      ROS_INFO("[multiScanRegistration] invalid scanID" );
+      break;
+    }
+
+    /*if (!halfPassed) {
       if (ori < startOri - M_PI / 2) {
         ori += 2 * M_PI;
       } else if (ori > startOri + M_PI * 3 / 2) {
@@ -260,7 +293,13 @@ void MultiScanRegistration::process(pcl::PointCloud<pcl::PointXYZ>& laserCloudIn
       } else if (ori > endOri + M_PI / 2) {
         ori -= 2 * M_PI;
       }
+    }*/
+    if (ori > 0.0) {
+      ori = 2.0 * M_PI - ori;
+    } else {
+      ori = - ori;
     }
+
     /*
     IMPORTANT NOTE: Note that the velodyne scanner takes depth measurements
     continuously while rotating around its vertical axis (in contrast to the cameras,
@@ -270,17 +309,21 @@ void MultiScanRegistration::process(pcl::PointCloud<pcl::PointXYZ>& laserCloudIn
     */
     // calculate relative scan time based on point orientation
     float relTime = _config.scanPeriod * (ori - startOri) / (endOri - startOri);
+
+    // ROS_INFO("[multiScanRegistration] ori %d, %d, %f, %f", scanID, i, ori, relTime);
+
     // float relTime =  0.0;
     if (relTime < 0 )
     {
       // relTime = _config.scanPeriod * (ori + 2.0 * M_PI - startOri) / (endOri - startOri);
       // ROS_INFO("[multiScanRegistration] relTime %f, %f, %f, %f, %f, %d", -std::atan2(point.x, point.z), ori, startOri, -std::atan2(pointEnd.x, pointEnd.z), endOri, halfPassed);
+      counter_invalid_point++;
     }
     if (relTime > 0.1 )
     {
       // relTime = _config.scanPeriod * (ori - 2.0 * M_PI - startOri) / (endOri - startOri);
       //ROS_INFO("[multiScanRegistration] relTime %f, %f, %f, %f, %f, %d", -std::atan2(point.x, point.z), ori, startOri, -std::atan2(pointEnd.x, pointEnd.z), endOri, halfPassed);
-      // counter_invalid_point++;
+      counter_invalid_point++;
       // continue;
     }
 
@@ -292,10 +335,14 @@ void MultiScanRegistration::process(pcl::PointCloud<pcl::PointXYZ>& laserCloudIn
       transformToStartIMU(point);
     }
 
+    pointPrev = point;
+
     laserCloudScans[scanID].push_back(point);
   }
 
-  // ROS_INFO("[multiScanRegistration] invalid point %d, out of %d", counter_invalid_point, int(cloudSize));
+  if (counter_invalid_point > 0) {
+    ROS_INFO("[multiScanRegistration] invalid point %d, out of %d", counter_invalid_point, int(cloudSize));
+  }
 
   // construct sorted full resolution cloud
   cloudSize = 0;
