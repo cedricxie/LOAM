@@ -307,12 +307,12 @@ void MultiScanRegistration::process(pcl::PointCloud<pcl::PointXYZ>& laserCloudIn
     eliminated from this postprocessed data by compensating for the egomotion!!
     Note that this is in contrast to the raw data.
     */
-    // calculate relative scan time based on point orientation
-    float relTime = _config.scanPeriod * (ori - startOri) / (endOri - startOri);
 
+    // calculate relative scan time based on point orientation
+    // float relTime = _config.scanPeriod * (ori - startOri) / (endOri - startOri);
+    float relTime =  0.0;
     // ROS_INFO("[multiScanRegistration] ori %d, %d, %f, %f", scanID, i, ori, relTime);
 
-    // float relTime =  0.0;
     if (relTime < 0 )
     {
       // relTime = _config.scanPeriod * (ori + 2.0 * M_PI - startOri) / (endOri - startOri);
