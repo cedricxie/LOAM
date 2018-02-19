@@ -805,7 +805,8 @@ void LaserOdometry::process()
         float ty = s * _transform.pos.y();
         float tz = s * _transform.pos.z();
 
-        float arx = (-s*crx*sry*srz*pointOri.x + s*crx*crz*sry*pointOri.y + s*srx*sry*pointOri.z
+	// updated derivatives with respect to rotation
+        /*float arx = (-s*crx*sry*srz*pointOri.x + s*crx*crz*sry*pointOri.y + s*srx*sry*pointOri.z
                      + s*tx*crx*sry*srz - s*ty*crx*crz*sry - s*tz*srx*sry) * coeff.x
                     + (s*srx*srz*pointOri.x - s*crz*srx*pointOri.y + s*crx*pointOri.z
                        + s*ty*crz*srx - s*tz*crx - s*tx*srx*srz) * coeff.y
@@ -826,9 +827,44 @@ void LaserOdometry::process()
                     + (-s*crx*crz*pointOri.x - s*crx*srz*pointOri.y
                        + s*ty*crx*srz + s*tx*crx*crz) * coeff.y
                     + ((s*cry*crz*srx - s*sry*srz)*pointOri.x + (s*crz*sry + s*cry*srx*srz)*pointOri.y
+                       + tx*(s*sry*srz - s*cry*crz*srx) - ty*(s*crz*sry + s*cry*srx*srz)) * coeff.z;*/
+	 
+	float arx = -s * (- pointOri.x * crx * sry * srz 
+		          - pointOri.y * crz * crx * sry 
+		          + pointOri.z * sry * srx
+                          - tx * crx * srz * sry 
+		          - ty * crz * crx * sry 
+		          + tz * sry * srx) * coeff.x
+                    -s * (- pointOri.x * srz * srx 
+			  - pointOri.y * crz * srx 
+			  - pointOri.z * crx
+                          - tx * srz * srx
+			  - ty * crz * srx 
+			  - tz * crx) * coeff.y
+                    -s * (+ pointOri.x * cry * crx * srz
+			  + pointOri.y * crx * cry * crz
+			  - pointOri.z * cry * srx
+                          + tx * cry * crx * srz 
+			  + ty * crx * cry * crz
+			  - tz * cry * srx) * coeff.z;
+
+        float ary = ((-s*crz*sry - s*cry*srx*srz)*pointOri.x
+                     + (s*cry*crz*srx - s*sry*srz)*pointOri.y - s*crx*cry*pointOri.z
+                     + tx*(s*crz*sry + s*cry*srx*srz) + ty*(s*sry*srz - s*cry*crz*srx)
+                     + s*tz*crx*cry) * coeff.x
+                    + ((s*cry*crz - s*srx*sry*srz)*pointOri.x
+                       + (s*cry*srz + s*crz*srx*sry)*pointOri.y - s*crx*sry*pointOri.z
+                       + s*tz*crx*sry - ty*(s*cry*srz + s*crz*srx*sry)
+                       - tx*(s*cry*crz - s*srx*sry*srz)) * coeff.z;
+
+        float arz = ((-s*cry*srz - s*crz*srx*sry)*pointOri.x + (s*cry*crz - s*srx*sry*srz)*pointOri.y
+                     + tx*(s*cry*srz + s*crz*srx*sry) - ty*(s*cry*crz - s*srx*sry*srz)) * coeff.x
+                    + (-s*crx*crz*pointOri.x - s*crx*srz*pointOri.y
+                       + s*ty*crx*srz + s*tx*crx*crz) * coeff.y
+                    + ((s*cry*crz*srx - s*sry*srz)*pointOri.x + (s*crz*sry + s*cry*srx*srz)*pointOri.y
                        + tx*(s*sry*srz - s*cry*crz*srx) - ty*(s*crz*sry + s*cry*srx*srz)) * coeff.z;
 	
-	// updated derivative with respect to translation
+	// updated derivatives with respect to translation
         /* float atx = -s*(cry*crz - srx*sry*srz) * coeff.x + s*crx*srz * coeff.y - s*(crz*sry + cry*srx*srz) * coeff.z;
 	float aty = -s*(cry*srz + crz*srx*sry) * coeff.x - s*crx*crz * coeff.y - s*(sry*srz - cry*crz*srx) * coeff.z;
 	float atz = s*crx*sry * coeff.x - s*srx * coeff.y - s*crx*cry * coeff.z;*/
