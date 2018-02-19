@@ -804,16 +804,20 @@ void LaserOdometry::process()
         float tx = s * _transform.pos.x();
         float ty = s * _transform.pos.y();
         float tz = s * _transform.pos.z();
+	
+	// updated derivatives with respect to rotation and translation
+	float arx, ary, arz, atx, aty, atz;
+	int selectMethodType = 1; // 1: original; 2: modified; 3: disturbance model
 
-	// updated derivatives with respect to rotation
-        /*float arx = (-s*crx*sry*srz*pointOri.x + s*crx*crz*sry*pointOri.y + s*srx*sry*pointOri.z
+	if (selectMethodType == 1) {
+	   arx = (-s*crx*sry*srz*pointOri.x + s*crx*crz*sry*pointOri.y + s*srx*sry*pointOri.z
                      + s*tx*crx*sry*srz - s*ty*crx*crz*sry - s*tz*srx*sry) * coeff.x
                     + (s*srx*srz*pointOri.x - s*crz*srx*pointOri.y + s*crx*pointOri.z
                        + s*ty*crz*srx - s*tz*crx - s*tx*srx*srz) * coeff.y
                     + (s*crx*cry*srz*pointOri.x - s*crx*cry*crz*pointOri.y - s*cry*srx*pointOri.z
                        + s*tz*cry*srx + s*ty*crx*cry*crz - s*tx*crx*cry*srz) * coeff.z;
 
-        float ary = ((-s*crz*sry - s*cry*srx*srz)*pointOri.x
+           ary = ((-s*crz*sry - s*cry*srx*srz)*pointOri.x
                      + (s*cry*crz*srx - s*sry*srz)*pointOri.y - s*crx*cry*pointOri.z
                      + tx*(s*crz*sry + s*cry*srx*srz) + ty*(s*sry*srz - s*cry*crz*srx)
                      + s*tz*crx*cry) * coeff.x
@@ -822,14 +826,19 @@ void LaserOdometry::process()
                        + s*tz*crx*sry - ty*(s*cry*srz + s*crz*srx*sry)
                        - tx*(s*cry*crz - s*srx*sry*srz)) * coeff.z;
 
-        float arz = ((-s*cry*srz - s*crz*srx*sry)*pointOri.x + (s*cry*crz - s*srx*sry*srz)*pointOri.y
+           arz = ((-s*cry*srz - s*crz*srx*sry)*pointOri.x + (s*cry*crz - s*srx*sry*srz)*pointOri.y
                      + tx*(s*cry*srz + s*crz*srx*sry) - ty*(s*cry*crz - s*srx*sry*srz)) * coeff.x
                     + (-s*crx*crz*pointOri.x - s*crx*srz*pointOri.y
                        + s*ty*crx*srz + s*tx*crx*crz) * coeff.y
                     + ((s*cry*crz*srx - s*sry*srz)*pointOri.x + (s*crz*sry + s*cry*srx*srz)*pointOri.y
-                       + tx*(s*sry*srz - s*cry*crz*srx) - ty*(s*crz*sry + s*cry*srx*srz)) * coeff.z;*/
-	 
-	float arx = -s * (- pointOri.x * crx * sry * srz 
+                       + tx*(s*sry*srz - s*cry*crz*srx) - ty*(s*crz*sry + s*cry*srx*srz)) * coeff.z;
+	
+	   atx = -s*(cry*crz - srx*sry*srz) * coeff.x + s*crx*srz * coeff.y - s*(crz*sry + cry*srx*srz) * coeff.z;
+	   aty = -s*(cry*srz + crz*srx*sry) * coeff.x - s*crx*crz * coeff.y - s*(sry*srz - cry*crz*srx) * coeff.z;
+	   atz = s*crx*sry * coeff.x - s*srx * coeff.y - s*crx*cry * coeff.z;
+	}
+        else if (selectMethodType == 2) {
+	       arx = -s * (- pointOri.x * crx * sry * srz 
 		          - pointOri.y * crz * crx * sry 
 		          + pointOri.z * sry * srx
                           - tx * crx * srz * sry 
@@ -848,7 +857,7 @@ void LaserOdometry::process()
 			  + ty * crx * cry * crz
 			  - tz * cry * srx) * coeff.z;
 
-        float ary = -s * (+ pointOri.x * (-crz * sry - cry * srz * srx)
+              ary = -s * (+ pointOri.x * (-crz * sry - cry * srz * srx)
                           + pointOri.y * (sry * srz - crz * cry * srx)
 			  - pointOri.z * (crx * cry)
                           + tx * (-crz * sry - cry * srz * srx) 
@@ -862,7 +871,7 @@ void LaserOdometry::process()
 			  + ty * (-cry * srz - crz * sry * srx)
                           - tz * (crx * sry)) * coeff.z;
 
-        float arz = -s * (+ pointOri.x * (-cry * srz - crz * sry * srx) 
+              arz = -s * (+ pointOri.x * (-cry * srz - crz * sry * srx) 
 			  + pointOri.y * (-crz * cry + srx * sry * srz)
 			  + tx * (-cry * srz - crz * sry * srx) 
 			  + ty * (-crz * cry + srx * sry * srz)) * coeff.x
@@ -874,26 +883,19 @@ void LaserOdometry::process()
 			  - pointOri.y * (crz * sry + cry * srz * srx)
                           + tx * (-sry * srz + crz * cry * srx) 
 			  - ty * (crz * sry + cry * srz * srx)) * coeff.z;
-	
-	// updated derivatives with respect to translation
-        /* float atx = -s*(cry*crz - srx*sry*srz) * coeff.x + s*crx*srz * coeff.y - s*(crz*sry + cry*srx*srz) * coeff.z;
-	float aty = -s*(cry*srz + crz*srx*sry) * coeff.x - s*crx*crz * coeff.y - s*(sry*srz - cry*crz*srx) * coeff.z;
-	float atz = s*crx*sry * coeff.x - s*srx * coeff.y - s*crx*cry * coeff.z;*/
-	      
-        float atx = - s * (crz * cry - srx * sry * srz) * coeff.x 
+		
+	      atx = - s * (crz * cry - srx * sry * srz) * coeff.x 
 		    - s * (crx * srz) * coeff.y
                     - s * (crz * sry + cry * srz * srx) * coeff.z;
 
-        float aty = - s * (- cry * srz - crz * sry * srx) * coeff.x 
+              aty = - s * (- cry * srz - crz * sry * srx) * coeff.x 
 		    - s * (crz * crx) * coeff.y
                     - s * (crz * cry * srx - srz * sry) * coeff.z;
 
-        float atz = - s * (- crx * sry) * coeff.x 
+              atz = - s * (- crx * sry) * coeff.x 
 		    - s * (- srx) * coeff.y 
 		    - s * (cry * crx) * coeff.z;
-	
-	// calculate derivative based on disturbance method
-	/*
+	} else {
 	float x_trf_bck = + pointOri.x * (crz * cry - srx * sry * srz)
 	                  - pointOri.y * (cry * srz + crz * sry * srx)
 			  - pointOri.z * (crx * sry)
@@ -913,15 +915,14 @@ void LaserOdometry::process()
 			  - ty * (srz * sry - crz * cry * srx)
 			  + tz * (cry * crx);
 			  
-	float arx = -s * (0.0 *        coeff.x - z_trf_bck * coeff.y + y_trf_bck * coeff.z);
-	float ary = -s * (z_trf_bck *  coeff.x + 0.0 *       coeff.y - x_trf_bck * coeff.z);
-	float arz = -s * (-y_trf_bck * coeff.x + x_trf_bck * coeff.y + 0.0       * coeff.z);
-	
-	float atx = coeff.x;
-	float aty = coeff.y;
-	float atz = coeff.z;
-	
-	*/
+	      arx = -s * (0.0 *        coeff.x - z_trf_bck * coeff.y + y_trf_bck * coeff.z);
+	      ary = -s * (z_trf_bck *  coeff.x + 0.0 *       coeff.y - x_trf_bck * coeff.z);
+	      arz = -s * (-y_trf_bck * coeff.x + x_trf_bck * coeff.y + 0.0       * coeff.z);
+		
+	      atx = coeff.x;
+	      aty = coeff.y;
+	      atz = coeff.z;
+	}
 
         float d2 = coeff.intensity;
 
