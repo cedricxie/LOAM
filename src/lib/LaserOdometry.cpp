@@ -848,15 +848,19 @@ void LaserOdometry::process()
 			  + ty * crx * cry * crz
 			  - tz * cry * srx) * coeff.z;
 
-        float ary = -s * (+ pointOri.x * (-s*crz*sry - s*cry*srx*srz)
-                          + (s*cry*crz*srx - s*sry*srz)*pointOri.y
-			  - pointOri.z * crx * cry
-                     + tx*(s*crz*sry + s*cry*srx*srz) + ty*(s*sry*srz - s*cry*crz*srx)
-                     + s*tz*crx*cry) * coeff.x
-                    + ((s*cry*crz - s*srx*sry*srz)*pointOri.x
-                       + (s*cry*srz + s*crz*srx*sry)*pointOri.y - s*crx*sry*pointOri.z
-                       + s*tz*crx*sry - ty*(s*cry*srz + s*crz*srx*sry)
-                       - tx*(s*cry*crz - s*srx*sry*srz)) * coeff.z;
+        float ary = -s * (+ pointOri.x * (-crz * sry - cry * srz * srx)
+                          + pointOri.y * (sry * srz - crz * cry * srx)
+			  - pointOri.z * (crx * cry)
+                          + tx * (-crz * sry - cry * srz * srx) 
+			  + ty * (sry * srz - crz * cry * srx)
+                          - tz * (crx * cry)) * coeff.x
+		    -s * 0.0 * coeff.y
+                    -s * (+ pointOri.x * (crz * cry - srx * sry * srz)
+                          + pointOri.y * (-cry * srz - crz * sry * srx) 
+			  - pointOri.z * (crx * sry)
+			  + tx * (crz * cry - srx * sry * srz)
+			  + ty * (-cry * srz - crz * sry * srx)
+                          - tz * (crx * sry)) * coeff.z;
 
         float arz = ((-s*cry*srz - s*crz*srx*sry)*pointOri.x + (s*cry*crz - s*srx*sry*srz)*pointOri.y
                      + tx*(s*cry*srz + s*crz*srx*sry) - ty*(s*cry*crz - s*srx*sry*srz)) * coeff.x
