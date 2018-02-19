@@ -891,6 +891,37 @@ void LaserOdometry::process()
         float atz = - s * (- crx * sry) * coeff.x 
 		    - s * (- srx) * coeff.y 
 		    - s * (cry * crx) * coeff.z;
+	
+	// calculate derivative based on disturbance method
+	/*
+	float x_trf_bck = + pointOri.x * (crz * cry - srx * sry * srz)
+	                  - pointOri.y * (cry * srz + crz * sry * srx)
+			  - pointOri.z * (crx * sry)
+			  + tx * (crz * cry - srz * sry * srz)
+			  - ty * (cry * srz + crz * sry * srx)
+			  - tz * (crx * sry);
+	float y_trf_bck = + pointOri.x * (crx * srz)
+	                  + pointOri.y * (crz * crx)
+			  - pointOri.z * (srx)
+			  + tx * (crx * srz)
+			  + ty * (crz * crx)
+			  - tz * (srx);
+	float z_trf_bck = + pointOri.x * (crz * sry + cry * srz * srx)
+	                  - pointOri.y * (srz * sry - crz * cry * srx)
+			  + pointOri.z * (cry * crx)
+			  + tx * (crz * sry + cry * srz * srx)
+			  - ty * (srz * sry - crz * cry * srx)
+			  + tz * (cry * crx);
+			  
+	float arx = -s * (0.0 *        coeff.x - z_trf_bck * coeff.y + y_trf_bck * coeff.z);
+	float ary = -s * (z_trf_bck *  coeff.x + 0.0 *       coeff.y - x_trf_bck * coeff.z);
+	float arz = -s * (-y_trf_bck * coeff.x + x_trf_bck * coeff.y + 0.0       * coeff.z);
+	
+	float atx = coeff.x;
+	float aty = coeff.y;
+	float atz = coeff.z;
+	
+	*/
 
         float d2 = coeff.intensity;
 
