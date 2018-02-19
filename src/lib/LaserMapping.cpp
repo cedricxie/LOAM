@@ -216,6 +216,10 @@ bool LaserMapping::setup(ros::NodeHandle& node,
 
 void LaserMapping::transformAssociateToMap()
 {
+  // _transformSum: from Odometry module
+  // _transformBefMapped: at the start/before mapping
+  // _transformAftMapped: at the end/after mapping
+  // _transformTobeMapped: output
   _transformIncre.pos = _transformBefMapped.pos - _transformSum.pos;
   rotateYXZ(_transformIncre.pos, -(_transformSum.rot_y), -(_transformSum.rot_x), -(_transformSum.rot_z));
 
@@ -278,6 +282,27 @@ void LaserMapping::transformAssociateToMap()
   Vector3 v = _transformIncre.pos;
   rotateZXY(v, _transformTobeMapped.rot_z, _transformTobeMapped.rot_x, _transformTobeMapped.rot_y);
   _transformTobeMapped.pos = _transformAftMapped.pos - v;
+  
+  /*
+  Eigen::Affine3f vecToTransform(const vector<float> &vec) {
+      return pcl::getTransformation(vec[5], vec[3], vec[4], vec[2], vec[0], vec[1]);
+  }
+
+  vector<float> transformToVec(const Eigen::Affine3f &t, vector<float> &vec) {
+      pcl::getTranslationAndEulerAngles(t, vec[5], vec[3], vec[4], vec[2], vec[0], vec[1]);
+      return vec;
+  }
+
+  void improveOdometryByMapping(const vector<float> &beforeMapping,
+                             const vector<float> &afterMapping,
+                             const vector<float> &current,
+                             vector<float> &output) {
+      transformToVec(vecToTransform(afterMapping) *
+                     vecToTransform(beforeMapping).inverse()*
+                     vecToTransform(current),
+                     output);
+  }
+  */
 }
 
 
@@ -311,7 +336,7 @@ void LaserMapping::transformUpdate()
   _transformAftMapped = _transformTobeMapped;
 }
 
-
+// Associate to Map: first rotate, then translate
 
 void LaserMapping::pointAssociateToMap(const pcl::PointXYZI& pi, pcl::PointXYZI& po)
 {
@@ -842,10 +867,12 @@ void LaserMapping::optimizeTransformTobeMapped()
   pcl::PointCloud<pcl::PointXYZI> laserCloudOri;
   pcl::PointCloud<pcl::PointXYZI> coeffSel;
 
+  // start iterating
   for (size_t iterCount = 0; iterCount < _maxIterations; iterCount++) {
     laserCloudOri.clear();
     coeffSel.clear();
 
+    // process edges
     for (int i = 0; i < laserCloudCornerStackNum; i++) {
       pointOri = _laserCloudCornerStackDS->points[i];
       pointAssociateToMap(pointOri, pointSel);
@@ -931,6 +958,7 @@ void LaserMapping::optimizeTransformTobeMapped()
       }
     }
 
+    // proces planes
     for (int i = 0; i < laserCloudSurfStackNum; i++) {
       pointOri = _laserCloudSurfStackDS->points[i];
       pointAssociateToMap(pointOri, pointSel);
@@ -989,6 +1017,7 @@ void LaserMapping::optimizeTransformTobeMapped()
       }
     }
 
+    // prepare Jacobian matrix
     float srx = _transformTobeMapped.rot_x.sin();
     float crx = _transformTobeMapped.rot_x.cos();
     float sry = _transformTobeMapped.rot_y.sin();
