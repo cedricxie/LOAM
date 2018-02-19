@@ -827,14 +827,23 @@ void LaserOdometry::process()
                        + s*ty*crx*srz + s*tx*crx*crz) * coeff.y
                     + ((s*cry*crz*srx - s*sry*srz)*pointOri.x + (s*crz*sry + s*cry*srx*srz)*pointOri.y
                        + tx*(s*sry*srz - s*cry*crz*srx) - ty*(s*crz*sry + s*cry*srx*srz)) * coeff.z;
+	
+	// updated derivative with respect to translation
+        /* float atx = -s*(cry*crz - srx*sry*srz) * coeff.x + s*crx*srz * coeff.y - s*(crz*sry + cry*srx*srz) * coeff.z;
+	float aty = -s*(cry*srz + crz*srx*sry) * coeff.x - s*crx*crz * coeff.y - s*(sry*srz - cry*crz*srx) * coeff.z;
+	float atz = s*crx*sry * coeff.x - s*srx * coeff.y - s*crx*cry * coeff.z;*/
+	      
+        float atx = - s * (crz * cry - srx * sry * srz) * coeff.x 
+		    - s * (crx * srz) * coeff.y
+                    - s * (crz * sry + cry * srz * srx) * coeff.z;
 
-        float atx = -s*(cry*crz - srx*sry*srz) * coeff.x + s*crx*srz * coeff.y
-                    - s*(crz*sry + cry*srx*srz) * coeff.z;
+        float aty = - s * (- cry * srz - crz * sry * srx) * coeff.x 
+		    - s * (crz * crx) * coeff.y
+                    - s * (crz * cry * srx - srz * sry) * coeff.z;
 
-        float aty = -s*(cry*srz + crz*srx*sry) * coeff.x - s*crx*crz * coeff.y
-                    - s*(sry*srz - cry*crz*srx) * coeff.z;
-
-        float atz = s*crx*sry * coeff.x - s*srx * coeff.y - s*crx*cry * coeff.z;
+        float atz = - s * (- crx * sry) * coeff.x 
+		    - s * (- srx) * coeff.y 
+		    - s * (cry * crx) * coeff.z;
 
         float d2 = coeff.intensity;
 
