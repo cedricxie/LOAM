@@ -171,6 +171,7 @@ bool LaserOdometry::setup(ros::NodeHandle &node,
 
 void LaserOdometry::transformToStart(const pcl::PointXYZI& pi, pcl::PointXYZI& po)
 {
+  // first translate, then rotate based on registered scan time
   float s = 10 * (pi.intensity - int(pi.intensity));
 
   po.x = pi.x - s * _transform.pos.x();
@@ -195,7 +196,8 @@ size_t LaserOdometry::transformToEnd(pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud
 
     float s = 10 * (point.intensity - int(point.intensity));
     //float s = 0.0;
-
+	  
+    // rotate to start
     point.x -= s * _transform.pos.x();
     point.y -= s * _transform.pos.y();
     point.z -= s * _transform.pos.z();
@@ -205,12 +207,15 @@ size_t LaserOdometry::transformToEnd(pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud
     Angle ry = -s * _transform.rot_y.rad();
     Angle rz = -s * _transform.rot_z.rad();
     rotateZXY(point, rz, rx, ry);
+	  
+    // rotate to end
     rotateYXZ(point, _transform.rot_y, _transform.rot_x, _transform.rot_z);
 
     if (fabs(rx.deg()) > 5.0 || fabs(ry.deg()) > 5.0 || fabs(rz.deg()) > 5.0) {
        ROS_INFO("[laserOdometry] LARGE transformToEnd: %f, %f, %f || s: %f", rz.deg(), rx.deg(), ry.deg(), s);
     }
-
+	  
+    // correct with IMU
     point.x += _transform.pos.x() - _imuShiftFromStart.x();
     point.y += _transform.pos.y() - _imuShiftFromStart.y();
     point.z += _transform.pos.z() - _imuShiftFromStart.z();
@@ -536,15 +541,14 @@ void LaserOdometry::process()
       */
       for (int i = 0; i < cornerPointsSharpNum; i++) {
         // 将点坐标转换到起始点云坐标系中
-        // TODO: should do nothing if IMU not set?
         transformToStart(_cornerPointsSharp->points[i], pointSel);
 
         // 每迭代五次,搜索一次最近点和次临近点(降采样)
-        if (iterCount % 2 == 0) {
+        if (iterCount % 5 == 0) {
           pcl::removeNaNFromPointCloud(*_lastCornerCloud, *_lastCornerCloud, indices);
 
           // 找到pointSel(当前时刻边特征中的某一点)在laserCloudCornerLast中的1个最邻近点
-	        // -> 返回pointSearchInd(点对应的索引)  pointSearchSqDis(pointSel与对应点的欧氏距离)
+	  // -> 返回pointSearchInd(点对应的索引)  pointSearchSqDis(pointSel与对应点的欧氏距离)
           _lastCornerKDTree.nearestKSearch(pointSel, 1, pointSearchInd, pointSearchSqDis);
 
           // 在最邻近点附近(向上下三条扫描线以内)找到次临近点
@@ -599,11 +603,11 @@ void LaserOdometry::process()
           tripod1 = _lastCornerCloud->points[_pointSearchCornerInd1[i]]; // 最邻近点
           tripod2 = _lastCornerCloud->points[_pointSearchCornerInd2[i]]; // 次临近点
 
-	        // 当前点云的点坐标
+	  // 当前点云的点坐标
           float x0 = pointSel.x;
           float y0 = pointSel.y;
           float z0 = pointSel.z;
-	        // 上一时刻最邻近点的点坐标
+	  // 上一时刻最邻近点的点坐标
           float x1 = tripod1.x;
           float y1 = tripod1.y;
           float z1 = tripod1.z;
@@ -611,16 +615,16 @@ void LaserOdometry::process()
           float x2 = tripod2.x;
           float y2 = tripod2.y;
           float z2 = tripod2.z;
-	        // 文章中公式(2)的分子部分->分别作差并叉乘后的向量模长
+	  // 文章中公式(2)的分子部分->分别作差并叉乘后的向量模长
           float a012 = sqrt(((x0 - x1)*(y0 - y2) - (x0 - x2)*(y0 - y1))
                             * ((x0 - x1)*(y0 - y2) - (x0 - x2)*(y0 - y1))
                             + ((x0 - x1)*(z0 - z2) - (x0 - x2)*(z0 - z1))
                               * ((x0 - x1)*(z0 - z2) - (x0 - x2)*(z0 - z1))
                             + ((y0 - y1)*(z0 - z2) - (y0 - y2)*(z0 - z1))
                               * ((y0 - y1)*(z0 - z2) - (y0 - y2)*(z0 - z1)));
-	        // 文章中公式(2)分母部分 -> 两点间距离
+	  // 文章中公式(2)分母部分 -> 两点间距离
           float l12 = sqrt((x1 - x2)*(x1 - x2) + (y1 - y2)*(y1 - y2) + (z1 - z2)*(z1 - z2));
-	        // 向量[la；lb；lc] 为距离ld2分别对x0 y0 z0的偏导
+	  // 向量[la；lb；lc] 为距离ld2分别对x0 y0 z0的偏导
           float la = ((y1 - y2)*((x0 - x1)*(y0 - y2) - (x0 - x2)*(y0 - y1))
                       + (z1 - z2)*((x0 - x1)*(z0 - z2) - (x0 - x2)*(z0 - z1))) / a012 / l12;
 
@@ -648,7 +652,7 @@ void LaserOdometry::process()
           coeff.z = s * lc;
           coeff.intensity = s * ld2;
 
-	        // 满足阈值(ld2 < 0.5)，将特征点插入
+	  // 满足阈值(ld2 < 0.5)，将特征点插入
           if (s > 0.1 && ld2 != 0) {
             _laserCloudOri->push_back(_cornerPointsSharp->points[i]);
             _coeffSel->push_back(coeff);
@@ -666,7 +670,7 @@ void LaserOdometry::process()
       for (int i = 0; i < surfPointsFlatNum; i++) {
         transformToStart(_surfPointsFlat->points[i], pointSel);
 
-        if (iterCount % 2 == 0) {
+        if (iterCount % 5 == 0) {
           _lastSurfaceKDTree.nearestKSearch(pointSel, 1, pointSearchInd, pointSearchSqDis);
           int closestPointInd = -1, minPointInd2 = -1, minPointInd3 = -1;
           if (pointSearchSqDis[0] < 25) {
@@ -926,8 +930,10 @@ void LaserOdometry::process()
   }
 
   // 算出了两坨点云间的相对运动，他们是在这两帧点云的局部坐标系下的
+  // 相对运动时从new frame指向old frame，所以取反以后累加到总的运动中
+	
+  // 计算rotation angle
   Angle rx, ry, rz;
-  // 计算旋转角的累计变化量
   float corr = 1.0; // TODO: 1.05 in the original code
   accumulateRotation(_transformSum.rot_x,
                      _transformSum.rot_y,
@@ -936,7 +942,7 @@ void LaserOdometry::process()
                      -_transform.rot_y.rad() * corr,
                      -_transform.rot_z,
                      rx, ry, rz);
-
+  // 计算translation vector
   Vector3 v( _transform.pos.x()        - _imuShiftFromStart.x(),
              _transform.pos.y()        - _imuShiftFromStart.y(),
              _transform.pos.z() * corr - _imuShiftFromStart.z() );
@@ -1000,7 +1006,6 @@ void LaserOdometry::publishResult()
   // _laserOdometryTrans.setRotation(tf::Quaternion(geoQuat.x, geoQuat.y, geoQuat.z, geoQuat.w));
   _laserOdometryTrans.setOrigin(tf::Vector3( _transformSum.pos.x(), _transformSum.pos.y(), _transformSum.pos.z()) );
   _tfBroadcaster.sendTransform(_laserOdometryTrans);
-
 
   // publish cloud results according to the input output ratio
   if (_ioRatio < 2 || _frameCount % _ioRatio == 1) {
