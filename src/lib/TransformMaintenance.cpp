@@ -229,7 +229,7 @@ void TransformMaintenance::laserOdometryHandler(const nav_msgs::Odometry::ConstP
   tf::Matrix3x3 result = tf::Matrix3x3(tf::Quaternion(geoQuat.z, -geoQuat.x, -geoQuat.y, geoQuat.w));
 
   std::ofstream myfile;
-  myfile.open ("/home/cedricxie/Documents/Udacity/Didi_Challenge/catkin_ws/ros_bags/kitti/odometry/result.txt", std::ios_base::app);
+  myfile.open ("/home/cedricxie/Documents/LOAM/kitti_odometry/result.txt", std::ios_base::app);
   myfile << result[0][0] << " " << result[0][1] << " " << result[0][2] << " " << _transformMapped[3] << " "
          << result[1][0] << " " << result[1][1] << " " << result[1][2] << " " << _transformMapped[4] << " "
          << result[2][0] << " " << result[2][1] << " " << result[2][2] << " " << _transformMapped[5] << " " << " \n";

@@ -271,7 +271,7 @@ void MultiScanRegistration::process(pcl::PointCloud<pcl::PointXYZ>& laserCloudIn
         myfile << ii << " " << oriTemp << " " << pointTemp.x << " " << pointTemp.z << " " << scanID << " \n";
       }
       myfile.close();*/
-      ROS_INFO("[multiScanRegistration] invalid scanID" );
+      ROS_INFO("[multiScanRegistration] Too many scanID" );
       break;
     }
 
@@ -310,7 +310,8 @@ void MultiScanRegistration::process(pcl::PointCloud<pcl::PointXYZ>& laserCloudIn
 
     // calculate relative scan time based on point orientation
     // float relTime = _config.scanPeriod * (ori - startOri) / (endOri - startOri);
-    float relTime =  0.0;
+    // float relTime =  0.0;
+    float relTime =  _config.scanPeriod * 0.99;
     // ROS_INFO("[multiScanRegistration] ori %d, %d, %f, %f", scanID, i, ori, relTime);
 
     if (relTime < 0 )

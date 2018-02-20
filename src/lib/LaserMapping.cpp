@@ -51,7 +51,7 @@ using std::pow;
 LaserMapping::LaserMapping(const float& scanPeriod,
                            const size_t& maxIterations)
       : _scanPeriod(scanPeriod),
-        _stackFrameNum(-1),
+        _stackFrameNum(5),
         _mapFrameNum(-1),
         _frameCount(0),
         _mapFrameCount(0),
@@ -282,7 +282,7 @@ void LaserMapping::transformAssociateToMap()
   Vector3 v = _transformIncre.pos;
   rotateZXY(v, _transformTobeMapped.rot_z, _transformTobeMapped.rot_x, _transformTobeMapped.rot_y);
   _transformTobeMapped.pos = _transformAftMapped.pos - v;
-  
+
   /*
   Eigen::Affine3f vecToTransform(const vector<float> &vec) {
       return pcl::getTransformation(vec[5], vec[3], vec[4], vec[2], vec[0], vec[1]);
