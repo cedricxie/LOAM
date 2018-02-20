@@ -920,24 +920,24 @@ void LaserOdometry::process()
                  - s * (-srx) * coeff.y
                  - s * (-cry * crx) * coeff.z;
       	} else {
-           float x_trf_bck = + pointOri.x * (crz * cry - srx * sry * srz)
-                             - pointOri.y * (cry * srz + crz * sry * srx)
-                             - pointOri.z * (crx * sry)
-                             + tx * (crz * cry - srz * sry * srz)
-                             - ty * (cry * srz + crz * sry * srx)
-                             - tz * (crx * sry);
-           float y_trf_bck = + pointOri.x * (crx * srz)
+           float x_trf_bck = + pointOri.x * (crz * cry + srx * sry * srz)
+                             + pointOri.y * (cry * srz - crz * sry * srx)
+                             + pointOri.z * (crx * sry)
+                             + tx * (-crz * cry - srz * sry * srz)
+                             + ty * (-cry * srz + crz * sry * srx)
+                             + tz * (-crx * sry);
+           float y_trf_bck = + pointOri.x * (-crx * srz)
                              + pointOri.y * (crz * crx)
-                             - pointOri.z * (srx)
+                             + pointOri.z * (srx)
                              + tx * (crx * srz)
-                             + ty * (crz * crx)
-                             - tz * (srx);
-           float z_trf_bck = + pointOri.x * (crz * sry + cry * srz * srx)
-                             - pointOri.y * (srz * sry - crz * cry * srx)
+                             + ty * (-crz * crx)
+                             + tz * (-srx);
+           float z_trf_bck = + pointOri.x * (-crz * sry + cry * srz * srx)
+                             + pointOri.y * (-srz * sry - crz * cry * srx)
                              + pointOri.z * (cry * crx)
-                             + tx * (crz * sry + cry * srz * srx)
-                             - ty * (srz * sry - crz * cry * srx)
-                             + tz * (cry * crx);
+                             + tx * (crz * sry - cry * srz * srx)
+                             + ty * (srz * sry + crz * cry * srx)
+                             + tz * (-cry * crx);
 
            arx = -s * (0.0 *        coeff.x - z_trf_bck * coeff.y + y_trf_bck * coeff.z);
            ary = -s * (z_trf_bck *  coeff.x + 0.0 *       coeff.y - x_trf_bck * coeff.z);
