@@ -807,16 +807,16 @@ void LaserOdometry::process()
 
       	// updated derivatives with respect to rotation and translation
       	float arx, ary, arz, atx, aty, atz;
-      	int selectMethodType = 1; // 1: original; 2: modified; 3: disturbance model
+      	int selectMethodType = 3; // 1: original; 2: modified; 3: disturbance model
 
       	if (selectMethodType == 1) {
-           arx = s * (+ pointOri.x * (-crx * sry * srz) 
-                      + pointOri.y * (crx * crz * sry) 
+           arx = s * (+ pointOri.x * (-crx * sry * srz)
+                      + pointOri.y * (crx * crz * sry)
                       + pointOri.z * (srx * sry)
-                      + tx * (crx * sry * srz) 
-                      - ty * (crx * crz * sry) 
+                      + tx * (crx * sry * srz)
+                      - ty * (crx * crz * sry)
                       - tz * (srx * sry)) * coeff.x
-               + s * (+ pointOri.x * (srx * srz) 
+               + s * (+ pointOri.x * (srx * srz)
                       - pointOri.y * (crz * srx)
                       + pointOri.z * crx
                       - tx * (srx * srz)
@@ -828,40 +828,41 @@ void LaserOdometry::process()
            ary = s * (+ pointOri.x * (-crz*sry - cry*srx*srz)
                       + pointOri.y * (cry*crz*srx - sry*srz)
                       - pointOri.z * (crx * cry)
-                      + tx * (crz * sry + cry * srx * srz) 
+                      + tx * (crz * sry + cry * srx * srz)
                       + ty * (sry * srz - cry * crz * srx)
                       + tz * (crx * cry)) * coeff.x
                + s * (+ pointOri.x * (cry * crz - srx * sry * srz)
-                      + pointOri.y * (cry * srz + crz * srx * sry) 
+                      + pointOri.y * (cry * srz + crz * srx * sry)
                       - pointOri.z * (crx * sry)
                       - tx * (cry * crz - srx * sry * srz)
-		      - ty * (cry * srz + crz * srx * sry)
-		      + tz * (crx * sry)) * coeff.z;
+                      - ty * (cry * srz + crz * srx * sry)
+                      + tz * (crx * sry)) * coeff.z;
 
-           arz = s * (+ pointOri.x * (-cry * srz - crz * srx * sry) 
+           arz = s * (+ pointOri.x * (-cry * srz - crz * srx * sry)
                       + pointOri.y * (cry * crz - srx * sry * srz)
-                      + tx * (cry * srz + crz * srx * sry) 
+                      + tx * (cry * srz + crz * srx * sry)
                       - ty * (cry * crz - srx * sry * srz)) * coeff.x
-               + s * (+ pointOri.x * (-crx * crz) 
+               + s * (+ pointOri.x * (-crx * crz)
                       - pointOri.y * (crx * srz)
                       + tx * crx * crz
-		      + ty * crx * srz) * coeff.y
-               + s * (+ pointOri.x * (cry * crz * srx - sry * srz) 
+                      + ty * crx * srz) * coeff.y
+               + s * (+ pointOri.x * (cry * crz * srx - sry * srz)
                       + pointOri.y * (crz * sry + cry * srx * srz)
-                      + tx * (sry * srz - cry * crz * srx) 
+                      + tx * (sry * srz - cry * crz * srx)
                       - ty * (crz * sry + cry * srx * srz)) * coeff.z;
 
-           atx = - s * (cry * crz - srx * sry * srz) * coeff.x 
-                 + s * (crx * srz) * coeff.y 
+           atx = - s * (cry * crz - srx * sry * srz) * coeff.x
+                 + s * (crx * srz) * coeff.y
                  - s * (crz * sry + cry * srx * srz) * coeff.z;
-           aty = - s * (cry * srz + crz * srx * sry) * coeff.x 
-                 - s * (crx * crz) * coeff.y 
+           aty = - s * (cry * srz + crz * srx * sry) * coeff.x
+                 - s * (crx * crz) * coeff.y
                  - s * (sry * srz - cry * crz * srx) * coeff.z;
-           atz = + s * (crx * sry) * coeff.x 
-                 - s * (srx) * coeff.y 
+           atz = + s * (crx * sry) * coeff.x
+                 - s * (srx) * coeff.y
                  - s * (crx * cry) * coeff.z;
       	}
         else if (selectMethodType == 2) {
+           s = -1.0;
            arx = -s * (+ pointOri.x * crx * sry * srz
                        - pointOri.y * crz * crx * sry
                        - pointOri.z * sry * srx
@@ -920,6 +921,7 @@ void LaserOdometry::process()
                  - s * (-srx) * coeff.y
                  - s * (-cry * crx) * coeff.z;
       	} else {
+           s = 1.0;
            float x_trf_bck = + pointOri.x * (crz * cry + srx * sry * srz)
                              + pointOri.y * (cry * srz - crz * sry * srx)
                              + pointOri.z * (crx * sry)
@@ -943,9 +945,9 @@ void LaserOdometry::process()
            ary = -s * (z_trf_bck *  coeff.x + 0.0 *       coeff.y - x_trf_bck * coeff.z);
            arz = -s * (-y_trf_bck * coeff.x + x_trf_bck * coeff.y + 0.0       * coeff.z);
 
-           atx = coeff.x;
-           aty = coeff.y;
-           atz = coeff.z;
+           atx = -s * coeff.x;
+           aty = -s * coeff.y;
+           atz = -s * coeff.z;
       	}
 
         float d2 = coeff.intensity;
