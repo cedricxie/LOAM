@@ -1137,7 +1137,7 @@ void LaserMapping::publishResult()
 
     // accumulate map cloud
     // TODO: modify to include full map as output
-    // _laserCloudSurround->clear();
+    _laserCloudSurround->clear();
     size_t laserCloudSurroundNum = _laserCloudSurroundInd.size();
     for (int i = 0; i < laserCloudSurroundNum; i++) {
       size_t ind = _laserCloudSurroundInd[i];
